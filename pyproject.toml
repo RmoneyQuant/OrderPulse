@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "OrderPulse"
+version = "0.2.39"
+requires-python = ">=3.9"
+description = "High-performance exchange feed parser and orderflow analytics engine with Rust and Python bindings"
+readme = { file = "README.md", content-type = "text/markdown" } 
+
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "fastreader.fastreader"

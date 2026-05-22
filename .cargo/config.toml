@@ -1,0 +1,2 @@
+[build]
+rustflags = ["-C", "link-arg=-Wl,-rpath,/home/pratima/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib"]

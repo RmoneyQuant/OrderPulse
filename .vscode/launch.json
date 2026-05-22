@@ -1,0 +1,107 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    
+    {
+      "name": "Debug OrderPluse",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin",
+          "OrderPluse"
+        ],
+        "filter": {
+          "name": "OrderPluse",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "/nas/50.30/NSE_CM/Feed_CM_StreamID_2_29_12_2025.bin",
+        "1333",
+        "10"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "LOB_SKIP_BENCH": "1",
+        "ORDERPULSE_DEBUG": "1",
+        "ORDERPULSE_DEBUG_LIMIT": "20"
+      }
+    },
+    {
+      "name": "Debug lib.rs tests only",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--lib",
+          "--no-run"
+        ],
+        "filter": {
+          "name": "fastreader",
+          "kind": "lib"
+        }
+      },
+      "args": [
+        "--nocapture"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    },
+    {
+      "name": "Debug one lib.rs test",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--lib",
+          "--no-run"
+        ],
+        "filter": {
+          "name": "fastreader",
+          "kind": "lib"
+        }
+      },
+      "args": [
+        "${input:libTestName}",
+        "--nocapture"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    },
+    {
+      "name": "Debug lib.rs tests only (fallback)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--lib",
+          "--no-run"
+        ]
+      },
+      "args": [
+        "--nocapture"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "libTestName",
+      "type": "promptString",
+      "description": "Enter a lib.rs test name (e.g. orderbook_builder_build_and_snapshot_work)",
+      "default": "orderbook_builder_build_and_snapshot_work"
+    }
+  ]
+}

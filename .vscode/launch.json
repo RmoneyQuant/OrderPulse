@@ -9,6 +9,8 @@
       "cargo": {
         "args": [
           "build",
+          "--package",
+          "OrderPluse",
           "--bin",
           "OrderPluse"
         ],
@@ -36,16 +38,15 @@
       "cargo": {
         "args": [
           "test",
+          "--package",
+          "OrderPluse",
           "--lib",
           "--no-run"
-        ],
-        "filter": {
-          "name": "fastreader",
-          "kind": "lib"
-        }
+        ]
       },
       "args": [
-        "--nocapture"
+        "--nocapture",
+        "--test-threads=1"
       ],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -59,17 +60,17 @@
       "cargo": {
         "args": [
           "test",
+          "--package",
+          "OrderPluse",
           "--lib",
           "--no-run"
-        ],
-        "filter": {
-          "name": "fastreader",
-          "kind": "lib"
-        }
+        ]
       },
       "args": [
+        "--exact",
         "${input:libTestName}",
-        "--nocapture"
+        "--nocapture",
+        "--test-threads=1"
       ],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -83,6 +84,8 @@
       "cargo": {
         "args": [
           "test",
+          "--package",
+          "OrderPluse",
           "--lib",
           "--no-run"
         ]
@@ -100,8 +103,8 @@
     {
       "id": "libTestName",
       "type": "promptString",
-      "description": "Enter a lib.rs test name (e.g. orderbook_builder_build_and_snapshot_work)",
-      "default": "orderbook_builder_build_and_snapshot_work"
+      "description": "Enter an exact lib.rs test name (e.g. tests::test_is_end_of_msg_peek_does_not_advance_cursor)",
+      "default": "tests::test_is_end_of_msg_peek_does_not_advance_cursor"
     }
   ]
 }

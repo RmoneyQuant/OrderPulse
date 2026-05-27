@@ -2,15 +2,16 @@
 fastreader — comprehensive end-user test suite
 ===============================================
 
-Covers every public method across all four classes:
+Covers every public method across the public classes:
 
     FeedPathBuilder        — build(), build_and_verify()
+    SymbolMaster           — load(), load_for_date(), lookup(), enrich()
     MessageCacheReader     — load_to_cache(), get_all_messages(), get_order_message(),
                              get_trade_message(), get_all_trade_message(), get_cache_summary()
-    StreamingBinaryLoader  — open_stream(), get_next_message(), get_next_msg(), reset_cursor()
+    StreamingBinaryLoader  — open_stream(), get_next_msg(), get_next_msg(), reset_cursor()
     OrderbookBuilder       — apply_filter(), build_from_source(), build_from_list(),
                              orderbook_add_msg(), get_active_tokens(), get_snapshot(),
-                             get_orderbook_snapshot(), get_full_depth(),
+                             get_snapshot(), get_full_depth(),
                              snapshot_header(), get_snapshot_row()
 
 Integration tests that touch real files are automatically skipped when the file
@@ -19,7 +20,239 @@ is absent, so the suite passes clean in any environment.
 Run:
     python -m unittest test_streaming -v
 """
+Enhance the public Python API documentation, stub file, examples, and tests for the already-implemented FeedPathBuilder and SymbolMaster classes in the OrderPulse / fastreader Rust-PyO3 library.
 
+Important:
+Do not re-implement FeedPathBuilder or SymbolMaster because they are already implemented in Rust.
+Only make sure they are properly exposed, documented, typed, and tested for Python users.
+
+PyO3 module export must include:
+
+m.add_class::<FeedPathBuilder>()?;
+m.add_class::<SymbolMaster>()?;
+
+Verify that Python users can import both classes:
+
+from fastreader import FeedPathBuilder, SymbolMaster
+
+1. FeedPathBuilder documentation and examples
+
+Document that FeedPathBuilder is used to build NSE feed binary file paths for NSE_FO and NSE_CM data.
+
+Expected Python usage:
+
+from fastreader import FeedPathBuilder
+
+builder = FeedPathBuilder()
+
+fo_path = builder.build(
+    segment="NSE_FO",
+    stream_id=1,
+    day=27,
+    month=5,
+    year=2026
+)
+
+cm_path = builder.build(
+    segment="NSE_CM",
+    stream_id=2,
+    day=27,
+    month=5,
+    year=2026
+)
+
+Expected default base path:
+
+"/nas/50.30"
+
+Expected NSE_FO output pattern:
+
+"/nas/50.30/NSE_FO/Feed_FO_StreamID_1_27_05_2026.bin"
+
+Expected NSE_CM output pattern:
+
+"/nas/50.30/NSE_CM/Feed_CM_StreamID_2_27_05_2026.bin"
+
+Also document custom base path usage:
+
+fo_path = builder.build(
+    segment="NSE_FO",
+    stream_id=1,
+    day=27,
+    month=5,
+    year=2026,
+    base_path="/mnt/data"
+)
+
+Expected output:
+
+"/mnt/data/NSE_FO/Feed_FO_StreamID_1_27_05_2026.bin"
+
+Also document build_and_verify():
+
+verified_path = builder.build_and_verify(
+    segment="NSE_FO",
+    stream_id=1,
+    day=27,
+    month=5,
+    year=2026
+)
+
+Expected behavior:
+- returns the path string if the file exists
+- raises RuntimeError if the file does not exist
+
+2. SymbolMaster documentation and examples
+
+Document that SymbolMaster is used to load NSE contract master CSV files and enrich decoded messages with token metadata.
+
+Expected Python import:
+
+from fastreader import SymbolMaster
+
+Load by date:
+
+sm = SymbolMaster()
+
+count = sm.load_for_date(
+    segment="NSE_FO",
+    day=27,
+    month=5,
+    year=2026
+)
+
+Expected default contract master path pattern:
+
+"/nas/50.30/CONTRACT/27_05_2026/NSE_FO_contract_27052026.csv"
+
+Also document explicit CSV path usage:
+
+count = sm.load(
+    "/nas/50.30/CONTRACT/27_05_2026/NSE_FO_contract_27052026.csv"
+)
+
+Token lookup example:
+
+info = sm.lookup(40434)
+
+Expected lookup result keys:
+- token
+- found
+- symbol
+- name
+- option_type
+- strike
+- expiry
+- lot_size
+
+3. Streaming enrichment example
+
+Document how FeedPathBuilder and SymbolMaster work together with StreamingBinaryLoader.
+
+Expected complete Python example:
+
+from fastreader import FeedPathBuilder, SymbolMaster, StreamingBinaryLoader
+
+path_builder = FeedPathBuilder()
+
+feed_path = path_builder.build(
+    segment="NSE_FO",
+    stream_id=1,
+    day=27,
+    month=5,
+    year=2026
+)
+
+symbol_master = SymbolMaster()
+symbol_master.load_for_date(
+    segment="NSE_FO",
+    day=27,
+    month=5,
+    year=2026
+)
+
+reader = StreamingBinaryLoader()
+reader.open_stream(feed_path, count_messages=False)
+reader.attach_symbol_master(symbol_master)
+
+msg = reader.get_next_msg()
+
+Expected:
+If token exists in SymbolMaster, msg should include:
+- token_symbol
+- strike_price
+- option_type
+- expiry
+- lot_size
+- name
+
+4. Update __init__.pyi
+
+Add or verify these public type signatures:
+
+from typing import Any, Dict, Optional
+
+class FeedPathBuilder:
+    def build(
+        self,
+        segment: str,
+        stream_id: int,
+        day: int,
+        month: int,
+        year: int,
+        base_path: Optional[str] = None
+    ) -> str: ...
+
+    def build_and_verify(
+        self,
+        segment: str,
+        stream_id: int,
+        day: int,
+        month: int,
+        year: int,
+        base_path: Optional[str] = None
+    ) -> str: ...
+
+class SymbolMaster:
+    def load(self, csv_path: str) -> int: ...
+
+    def load_for_date(
+        self,
+        segment: str,
+        day: int,
+        month: int,
+        year: int,
+        base_path: Optional[str] = None
+    ) -> int: ...
+
+    def lookup(self, token: int) -> Dict[str, Any]: ...
+
+    def enrich(self, msg: Dict[str, Any]) -> bool: ...
+
+5. Update tests
+
+Add or verify tests for:
+
+- FeedPathBuilder is importable from fastreader
+- SymbolMaster is importable from fastreader
+- FeedPathBuilder.build("NSE_FO", 1, 27, 5, 2026) returns:
+  "/nas/50.30/NSE_FO/Feed_FO_StreamID_1_27_05_2026.bin"
+
+- FeedPathBuilder.build("NSE_CM", 2, 27, 5, 2026) returns:
+  "/nas/50.30/NSE_CM/Feed_CM_StreamID_2_27_05_2026.bin"
+
+- FeedPathBuilder.build(..., base_path="/mnt/data") uses the custom base path correctly
+
+- FeedPathBuilder.build_and_verify() raises RuntimeError when file does not exist
+
+- SymbolMaster.load_for_date("NSE_FO", 27, 5, 2026) uses this expected path pattern:
+  "/nas/50.30/CONTRACT/27_05_2026/NSE_FO_contract_27052026.csv"
+
+- SymbolMaster.lookup(token) returns a dictionary with expected keys:
+  token, found, symbol, name, option_type, strike, expiry, lot_size
+
+Final goal:
+FeedPathBuilder and SymbolMaster are already implemented, but Python library users currently cannot clearly understand how to use them. Make them visible in the public API documentation, type stubs, examples, and tests so users can easily build NSE_FO/NSE_CM feed file paths and load/enrich SymbolMaster data.
 import os
 import unittest
 
@@ -28,15 +261,36 @@ import unittest
 # ---------------------------------------------------------------------------
 
 try:
-    from fastreader import (
-        FeedPathBuilder,
-        MessageCacheReader,
-        StreamingBinaryLoader,
-        OrderbookBuilder,
-    )
+    import fastreader as _fastreader
     _LIB_AVAILABLE = True
 except ImportError:
+    _fastreader = None
     _LIB_AVAILABLE = False
+
+if _LIB_AVAILABLE:
+    try:
+        from fastreader import MessageCacheReader, StreamingBinaryLoader, OrderbookBuilder
+    except ImportError:
+        _LIB_AVAILABLE = False
+
+if _LIB_AVAILABLE:
+    FeedPathBuilder = getattr(_fastreader, "FeedPathBuilder", None)
+    SymbolMaster = getattr(_fastreader, "SymbolMaster", None)
+else:
+    class FeedPathBuilder:  # pragma: no cover
+        pass
+
+    class SymbolMaster:  # pragma: no cover
+        pass
+
+    class MessageCacheReader:  # pragma: no cover
+        pass
+
+    class StreamingBinaryLoader:  # pragma: no cover
+        pass
+
+    class OrderbookBuilder:  # pragma: no cover
+        pass
 
 
 def _skip_no_lib(cls):
@@ -112,6 +366,19 @@ def _trade_msg(**kw) -> dict:
 # 1. FeedPathBuilder
 # ===========================================================================
 
+
+@_skip_no_lib
+class TestFastreaderPublicImports(unittest.TestCase):
+    """Public Python API import surface for path/symbol helpers."""
+
+    def test_feedpathbuilder_is_importable(self):
+        self.assertIsNotNone(FeedPathBuilder)
+        self.assertTrue(hasattr(FeedPathBuilder, "__call__"))
+
+    def test_symbolmaster_is_importable(self):
+        self.assertIsNotNone(SymbolMaster)
+        self.assertTrue(hasattr(SymbolMaster, "__call__"))
+
 @_skip_no_lib
 class TestFeedPathBuilderBuild(unittest.TestCase):
     """build() constructs file path strings without touching the filesystem."""
@@ -129,6 +396,14 @@ class TestFeedPathBuilderBuild(unittest.TestCase):
         path = self.b.build("NSE_FO", stream_id=1, day=21, month=5, year=2026)
         self.assertEqual(path, "/nas/50.30/NSE_FO/Feed_FO_StreamID_1_21_05_2026.bin")
 
+    def test_requested_fo_pattern_for_27_05_2026(self):
+        path = self.b.build("NSE_FO", stream_id=1, day=27, month=5, year=2026)
+        self.assertEqual(path, "/nas/50.30/NSE_FO/Feed_FO_StreamID_1_27_05_2026.bin")
+
+    def test_requested_cm_pattern_for_27_05_2026(self):
+        path = self.b.build("NSE_CM", stream_id=2, day=27, month=5, year=2026)
+        self.assertEqual(path, "/nas/50.30/NSE_CM/Feed_CM_StreamID_2_27_05_2026.bin")
+
     def test_short_name_cm_is_accepted(self):
         path = self.b.build("CM", stream_id=2, day=29, month=12, year=2025)
         self.assertEqual(path, "/nas/50.30/NSE_CM/Feed_CM_StreamID_2_29_12_2025.bin")
@@ -141,6 +416,12 @@ class TestFeedPathBuilderBuild(unittest.TestCase):
         path = self.b.build("NSE_CM", stream_id=1, day=1, month=5, year=2026,
                             base_path="/mnt/archive")
         self.assertEqual(path, "/mnt/archive/NSE_CM/Feed_CM_StreamID_1_01_05_2026.bin")
+
+    def test_requested_custom_base_path(self):
+        path = self.b.build(
+            "NSE_FO", stream_id=1, day=27, month=5, year=2026, base_path="/mnt/data"
+        )
+        self.assertEqual(path, "/mnt/data/NSE_FO/Feed_FO_StreamID_1_27_05_2026.bin")
 
     def test_single_digit_day_and_month_are_zero_padded(self):
         path = self.b.build("NSE_CM", stream_id=1, day=3, month=7, year=2025)
@@ -193,6 +474,50 @@ class TestFeedPathBuilderVerify(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.b.build_and_verify("NSE_CM", stream_id=1, day=1, month=1, year=2000)
 
+    def test_requested_missing_file_runtime_error(self):
+        with self.assertRaises(RuntimeError):
+            self.b.build_and_verify(
+                "NSE_FO",
+                stream_id=1,
+                day=27,
+                month=5,
+                year=2026,
+                base_path="/definitely/missing/orderpulse",
+            )
+
+
+@_skip_no_lib
+class TestSymbolMasterAPI(unittest.TestCase):
+    """SymbolMaster load/lookup behaviors and path-construction checks."""
+
+    def setUp(self):
+        self.sm = SymbolMaster()
+
+    def test_lookup_returns_expected_keys(self):
+        info = self.sm.lookup(40434)
+        self.assertIsInstance(info, dict)
+        expected = {
+            "token",
+            "found",
+            "symbol",
+            "name",
+            "option_type",
+            "strike",
+            "expiry",
+            "lot_size",
+        }
+        self.assertTrue(expected.issubset(info.keys()))
+
+    def test_load_for_date_expected_default_path_pattern(self):
+        day, month, year = 31, 12, 2099
+        expected_path = (
+            f"/nas/50.30/CONTRACT/{day:02}_{month:02}_{year}/"
+            f"NSE_FO_contract_{day:02}{month:02}{year}.csv"
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            self.sm.load_for_date("NSE_FO", day=day, month=month, year=year)
+        self.assertIn(expected_path, str(ctx.exception))
+
 
 # ===========================================================================
 # 2. MessageCacheReader
@@ -241,17 +566,31 @@ class TestMessageCacheReaderMessages(unittest.TestCase):
     def test_get_order_message_returns_only_orders(self):
         orders = self.reader.get_order_message()
         self.assertIsInstance(orders, list)
+        expected = {
+            "message_kind", "seq_no", "msg_len", "stream_id", "msg_type",
+            "exch_ts", "local_ts", "order_id", "token", "order_type",
+            "price", "quantity", "flags", "token_symbol", "strike_price",
+            "option_type",
+        }
         for msg in orders[:10]:
-            self.assertTrue(msg.startswith("Order Message:"),
-                            f"unexpected prefix: {msg[:40]}")
+            self.assertIsInstance(msg, dict)
+            self.assertEqual(msg.get("message_kind"), "order")
+            self.assertTrue(expected.issubset(msg.keys()))
 
     @_skip_no_file
     def test_get_trade_message_returns_only_trades(self):
         trades = self.reader.get_trade_message()
         self.assertIsInstance(trades, list)
+        expected = {
+            "message_kind", "seq_no", "msg_len", "stream_id", "msg_type",
+            "exch_ts", "local_ts", "buy_order_id", "sell_order_id", "token",
+            "trade_price", "trade_quantity", "flags", "token_symbol",
+            "strike_price", "option_type",
+        }
         for msg in trades[:10]:
-            self.assertTrue(msg.startswith("Trade Message:"),
-                            f"unexpected prefix: {msg[:40]}")
+            self.assertIsInstance(msg, dict)
+            self.assertEqual(msg.get("message_kind"), "trade")
+            self.assertTrue(expected.issubset(msg.keys()))
 
     @_skip_no_file
     def test_get_all_trade_message_is_alias_for_get_trade_message(self):
@@ -326,9 +665,7 @@ class TestStreamingBinaryLoaderOpen(unittest.TestCase):
 @_skip_no_lib
 class TestGetNextMessage(unittest.TestCase):
     """
-    get_next_message() must return (payload: str, is_end: bool).
-    is_end is False for every real message and True exactly once at EOF
-    (payload is then "END").
+    get_next_msg() must return a decoded dict per message and None at EOF.
     """
 
     @classmethod
@@ -339,49 +676,52 @@ class TestGetNextMessage(unittest.TestCase):
         cls.reader.open_stream(KNOWN_FILE, count_messages=False)
 
     @_skip_no_file
-    def test_return_value_is_a_two_element_tuple(self):
-        result = self.reader.get_next_message()
-        self.assertIsInstance(result, tuple)
-        self.assertEqual(len(result), 2)
+    def test_get_next_message_removed_from_public_api(self):
+        self.assertFalse(hasattr(self.reader, "get_next_message"))
 
     @_skip_no_file
-    def test_payload_is_a_string(self):
-        payload, _ = self.reader.get_next_message()
-        self.assertIsInstance(payload, str)
+    def test_return_value_is_dict_or_none(self):
+        result = self.reader.get_next_msg()
+        self.assertTrue(isinstance(result, dict) or result is None)
 
     @_skip_no_file
-    def test_is_end_is_a_bool(self):
-        _, is_end = self.reader.get_next_message()
-        self.assertIsInstance(is_end, bool)
+    def test_message_kind_exists(self):
+        msg = self.reader.get_next_msg()
+        if msg is not None:
+            self.assertIn(msg.get("message_kind"), {"order", "trade"})
 
     @_skip_no_file
-    def test_first_message_is_not_end_of_stream(self):
-        _, is_end = self.reader.get_next_message()
-        self.assertFalse(is_end)
+    def test_msg_type_exists(self):
+        msg = self.reader.get_next_msg()
+        if msg is not None:
+            self.assertIn(msg.get("msg_type"), {"N", "M", "X", "T"})
 
     @_skip_no_file
-    def test_payload_describes_an_order_or_trade(self):
-        payload, _ = self.reader.get_next_message()
-        self.assertTrue(
-            payload.startswith("Order Message:") or payload.startswith("Trade Message:"),
-            f"unexpected payload prefix: {payload[:60]}"
-        )
+    def test_first_message_has_token(self):
+        msg = self.reader.get_next_msg()
+        if msg is not None:
+            self.assertIsInstance(msg.get("token"), int)
 
-    def test_eof_payload_is_END_and_flag_is_True(self):
-        """After draining the stream, get_next_message() must return ('END', True)."""
+    @_skip_no_file
+    def test_fields_include_null_symbol_fields(self):
+        msg = self.reader.get_next_msg()
+        if msg is not None:
+            self.assertIn("token_symbol", msg)
+            self.assertIn("strike_price", msg)
+            self.assertIn("option_type", msg)
+
+    def test_eof_returns_none(self):
+        """After draining the stream, get_next_msg() must return None."""
         if not _FILE_PRESENT:
             self.skipTest(f"test file not found: {KNOWN_FILE}")
 
         reader = StreamingBinaryLoader()
         reader.open_stream(KNOWN_FILE, count_messages=False)
 
-        # Drain via get_next_msg (cheaper — no string formatting overhead)
         while reader.get_next_msg() is not None:
             pass
 
-        payload, is_end = reader.get_next_message()
-        self.assertEqual(payload, "END")
-        self.assertIs(is_end, True)
+        self.assertIsNone(reader.get_next_msg())
 
 
 @_skip_no_lib
@@ -715,7 +1055,7 @@ class TestGetActiveTokens(unittest.TestCase):
 
 
 # ===========================================================================
-# 4d. get_snapshot / get_orderbook_snapshot
+# 4d. get_snapshot / get_snapshot
 # ===========================================================================
 
 @_skip_no_lib
@@ -803,12 +1143,16 @@ class TestGetSnapshot(unittest.TestCase):
         self.assertEqual(snap["bids"], [])
         self.assertEqual(snap["asks"], [])
 
-    def test_get_orderbook_snapshot_is_alias(self):
+    def test_get_snapshot_is_alias(self):
         builder = self._two_sided_builder()
         self.assertEqual(
             builder.get_snapshot(token=777, levels=5),
-            builder.get_orderbook_snapshot(token=777, levels=5),
+            builder.get_snapshot(token=777, levels=5),
         )
+
+    def test_get_orderbook_snapshot_removed_from_public_api(self):
+        builder = self._two_sided_builder()
+        self.assertFalse(hasattr(builder, "get_orderbook_snapshot"))
 
 
 # ===========================================================================

@@ -448,24 +448,24 @@ impl MessageCacheReader {
         self.messages.iter().map(format_message).collect()
     }
 
-    pub fn get_order_message(&self) -> Vec<String> {
+    pub fn get_order_message(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         self.messages
             .iter()
             .filter(|message| matches!(message, Message::Order(_)))
-            .map(format_message)
+            .map(|message| message_to_py_dict(py, message))
             .collect()
     }
 
-    pub fn get_trade_message(&self) -> Vec<String> {
+    pub fn get_trade_message(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         self.messages
             .iter()
             .filter(|message| matches!(message, Message::Trade(_)))
-            .map(format_message)
+            .map(|message| message_to_py_dict(py, message))
             .collect()
     }
 
-    pub fn get_all_trade_message(&self) -> Vec<String> {
-        self.get_trade_message()
+    pub fn get_all_trade_message(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        self.get_trade_message(py)
     }
 
     pub fn get_cache_summary(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -560,13 +560,6 @@ impl StreamingBinaryLoader {
         Ok(())
     }
 
-    pub fn get_next_message(&mut self) -> PyResult<(String, bool)> {
-        match self.get_next_message_raw()? {
-            Some(message) => Ok((format_message(&message), false)),
-            None => Ok(("END".to_string(), true)),
-        }
-    }
-
     pub fn get_next_msg(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let Some(message) = self.get_next_message_raw()? else {
             return Ok(None);
@@ -592,6 +585,27 @@ impl StreamingBinaryLoader {
             }
         }
         Ok(Some(py_obj))
+    }
+
+    pub fn is_end_of_msg(&mut self) -> PyResult<bool> {
+        let Some(file) = self.file.as_mut() else {
+            return Ok(true);
+        };
+
+        let current_pos = file
+            .stream_position()
+            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+
+        let result = read_next_message_from_file(file);
+
+        file.seek(SeekFrom::Start(current_pos))
+            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+
+        match result {
+            Ok(Some(_message)) => Ok(false),
+            Ok(None) => Ok(true),
+            Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
+        }
     }
 
     /// Attach a loaded SymbolMaster so that get_next_msg() auto-enriches every message.
@@ -1147,15 +1161,6 @@ impl OrderbookBuilder {
 
         Ok(dict.into_any().unbind())
     }
-    #[pyo3(signature = (token, levels=None))]
-    pub fn get_orderbook_snapshot(
-        &self,
-        py: Python<'_>,
-        token: u32,
-        levels: Option<usize>,
-    ) -> PyResult<Py<PyAny>> {
-        self.get_snapshot(py, token, levels)
-    }
     pub fn snapshot_header(&self) -> String {
         "local_ts,exch_ts,mid_price,bid_price_0,bid_qty_0,ask_price_0,ask_qty_0,bid_price_1,bid_qty_1,ask_price_1,ask_qty_1,bid_price_2,bid_qty_2,ask_price_2,ask_qty_2,bid_price_3,bid_qty_3,ask_price_3,ask_qty_3,bid_price_4,bid_qty_4,ask_price_4,ask_qty_4".to_string()
     }
@@ -1486,6 +1491,8 @@ mod tests {
     use crate::structure::{
         Message, OrderMessage, OrderPacket, StreamHeader, TradeMessage, TradePacket,
     };
+    use std::mem::size_of;
+    use std::path::PathBuf;
 
     // ── helpers ─────────────────────────────────────────────────────────────
 
@@ -1536,6 +1543,16 @@ mod tests {
             local_ts: 400_000,
             flags,
         }
+    }
+
+    fn write_tmp(label: &str, data: &[u8]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("orderpulse_is_end_of_msg_{label}.bin"));
+        std::fs::write(&path, data).unwrap();
+        path
+    }
+
+    unsafe fn as_bytes<T: Sized>(val: &T) -> &[u8] {
+        std::slice::from_raw_parts(val as *const T as *const u8, size_of::<T>())
     }
 
     // ── format_message ───────────────────────────────────────────────────────
@@ -1645,6 +1662,68 @@ mod tests {
         });
     }
 
+    #[test]
+    fn test_is_end_of_msg_returns_true_when_unopened() {
+        pyo3::prepare_freethreaded_python();
+        pyo3::Python::with_gil(|_py| {
+            let mut loader = StreamingBinaryLoader::new();
+            assert!(loader.is_end_of_msg().unwrap());
+        });
+    }
+
+    #[test]
+    fn test_is_end_of_msg_peek_does_not_advance_cursor() {
+        let pkt = make_order_packet(b'N', b'B', 10, 101, 500, 1, false);
+        let path = write_tmp("peek_cursor", unsafe { as_bytes(&pkt) });
+
+        pyo3::prepare_freethreaded_python();
+        pyo3::Python::with_gil(|_py| {
+            let mut loader = StreamingBinaryLoader::new();
+            loader
+                .open_stream(path.to_str().unwrap().to_string(), false)
+                .unwrap();
+
+            assert!(!loader.is_end_of_msg().unwrap());
+
+            match loader.get_next_message_raw().unwrap().expect("expected one message") {
+                Message::Order(packet) => {
+                    let order_id = unsafe {
+                        std::ptr::addr_of!(packet.ord.order_id).read_unaligned()
+                    };
+                    assert_eq!(order_id, 10);
+                }
+                Message::Trade(_) => panic!("expected order message"),
+            }
+        });
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_is_end_of_msg_transitions_to_true_at_eof() {
+        let p1 = make_order_packet(b'N', b'B', 1, 101, 500, 1, false);
+        let p2 = make_order_packet(b'N', b'B', 2, 101, 501, 1, false);
+        let mut buf = unsafe { as_bytes(&p1) }.to_vec();
+        buf.extend_from_slice(unsafe { as_bytes(&p2) });
+        let path = write_tmp("eof_transition", &buf);
+
+        pyo3::prepare_freethreaded_python();
+        pyo3::Python::with_gil(|_py| {
+            let mut loader = StreamingBinaryLoader::new();
+            loader
+                .open_stream(path.to_str().unwrap().to_string(), false)
+                .unwrap();
+
+            assert!(!loader.is_end_of_msg().unwrap());
+            assert!(loader.get_next_message_raw().unwrap().is_some());
+            assert!(!loader.is_end_of_msg().unwrap());
+            assert!(loader.get_next_message_raw().unwrap().is_some());
+            assert!(loader.is_end_of_msg().unwrap());
+        });
+
+        let _ = std::fs::remove_file(&path);
+    }
+
     // ── OrderbookBuilder ─────────────────────────────────────────────────────
 
     #[test]
@@ -1713,23 +1792,14 @@ mod tests {
     }
 
     #[test]
-    fn test_get_orderbook_snapshot_alias_matches_get_snapshot() {
+    fn test_get_snapshot_returns_token_and_found_keys() {
         pyo3::prepare_freethreaded_python();
         pyo3::Python::with_gil(|py| {
             let builder = OrderbookBuilder::new();
             let snapshot = builder.get_snapshot(py, 99999, Some(5)).unwrap();
-            let alias = builder.get_orderbook_snapshot(py, 99999, Some(5)).unwrap();
-
             let snapshot_dict = snapshot.bind(py);
-            let alias_dict = alias.bind(py);
-
-            let snapshot_token: u32 = snapshot_dict.get_item("token").unwrap().extract().unwrap();
-            let alias_token: u32 = alias_dict.get_item("token").unwrap().extract().unwrap();
-            let snapshot_found: bool = snapshot_dict.get_item("found").unwrap().extract().unwrap();
-            let alias_found: bool = alias_dict.get_item("found").unwrap().extract().unwrap();
-
-            assert_eq!(snapshot_token, alias_token);
-            assert_eq!(snapshot_found, alias_found);
+            let _token: u32 = snapshot_dict.get_item("token").unwrap().extract().unwrap();
+            let _found: bool = snapshot_dict.get_item("found").unwrap().extract().unwrap();
         });
     }
 }
@@ -1957,7 +2027,7 @@ mod debug_tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    // ── 5. open_stream count + sequential get_next_message ───────────────────
+    // ── 5. open_stream count + sequential stream reads ───────────────────────
 
     #[test]
     fn debug_open_stream_sequential_reads() {

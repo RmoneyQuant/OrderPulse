@@ -91,7 +91,7 @@ Cache workflow for repeated analysis:
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Sequence, TypedDict, TypeAlias, overload
+from typing import Any, Dict, Literal, Optional, Sequence, TypedDict, TypeAlias, overload
 
 
 UInt32: TypeAlias = int
@@ -265,7 +265,7 @@ DecodedMessage: TypeAlias = OrderDict | TradeDict
 class Snapshot(TypedDict):
     """
     Snapshot dictionary returned by `OrderbookBuilder.get_snapshot()` and
-    `OrderbookBuilder.get_orderbook_snapshot()`.
+    `OrderbookBuilder.get_snapshot()`.
 
     Keys
     ----
@@ -501,13 +501,13 @@ class MessageCacheReader:
         """
         ...
 
-    def get_order_message(self) -> list[str]:
+    def get_order_message(self) -> list[dict[str, Any]]:
         """
-        Return only cached order messages as formatted strings.
+        Return only cached order messages as decoded dictionaries.
 
         Returns
         -------
-        list[str]
+        list[dict[str, Any]]
             Messages whose internal enum is `Message::Order`.
 
         Deep explanation
@@ -519,21 +519,18 @@ class MessageCacheReader:
         Example
         -------
         >>> orders = reader.get_order_message()
-        >>> orders[:2]
-        [
-            "Order Message: SeqNo 1, MsgLen 38, MsgType 'N', ...",
-            "Order Message: SeqNo 2, MsgLen 38, MsgType 'M', ...",
-        ]
+        >>> orders[0]["message_kind"]
+        'order'
         """
         ...
 
-    def get_trade_message(self) -> list[str]:
+    def get_trade_message(self) -> list[dict[str, Any]]:
         """
-        Return only cached trade messages as formatted strings.
+        Return only cached trade messages as decoded dictionaries.
 
         Returns
         -------
-        list[str]
+        list[dict[str, Any]]
             Messages whose internal enum is `Message::Trade`.
 
         Deep explanation
@@ -549,7 +546,7 @@ class MessageCacheReader:
         """
         ...
 
-    def get_all_trade_message(self) -> list[str]:
+    def get_all_trade_message(self) -> list[dict[str, Any]]:
         """
         Alias for `get_trade_message()`.
 
@@ -619,15 +616,15 @@ class StreamingBinaryLoader:
     - `open_stream(..., count_messages=True)` scans the file to count messages,
       then resets the file cursor. This can be slow for huge files.
     - `open_stream(..., count_messages=False)` opens quickly and returns 0.
-    - `get_next_message()` returns the string "END" when the file is exhausted.
+    - `get_next_msg()` returns None when the file is exhausted.
 
     Example
     -------
     >>> reader = StreamingBinaryLoader()
     >>> reader.open_stream("feed.bin", count_messages=False)
     0
-    >>> print(reader.get_next_message())
-    Order Message: SeqNo 1, MsgLen 38, MsgType 'N', ...
+    >>> print(reader.get_next_msg())
+    {'message_kind': 'order', 'seq_no': 1, 'msg_type': 'N', ...}
     """
 
     def __init__(self) -> None:
@@ -695,7 +692,7 @@ class StreamingBinaryLoader:
         ----------------
         If no file is open, the Rust method simply returns successfully.
         If a file is open, it performs `seek(0)` so the next call to
-        `get_next_message()` or `OrderbookBuilder.build_from_source()` starts
+        `get_next_msg()` or `OrderbookBuilder.build_from_source()` starts
         reading from the beginning again.
 
         Example
@@ -703,23 +700,22 @@ class StreamingBinaryLoader:
         >>> reader = StreamingBinaryLoader()
         >>> reader.open_stream("feed.bin", count_messages=False)
         0
-        >>> first = reader.get_next_message()
+        >>> first = reader.get_next_msg()
         >>> reader.reset_cursor()
-        >>> again = reader.get_next_message()
+        >>> again = reader.get_next_msg()
         >>> first == again
         True
         """
         ...
 
-    def get_next_message(self) -> str:
+    def get_next_msg(self) -> Optional[dict[str, Any]]:
         """
-        Read and format exactly one message from the current stream position.
+        Read one decoded message from the current stream position.
 
         Returns
         -------
-        str
-            A formatted order/trade message string, or the literal string
-            "END" when the file has no more messages.
+        Optional[dict[str, Any]]
+            One decoded message dictionary, or None at EOF.
 
         Raises
         ------
@@ -729,8 +725,9 @@ class StreamingBinaryLoader:
         Deep explanation
         ----------------
         This method is mostly for inspection/debugging. For high-performance
-        orderbook construction, prefer passing the reader directly to
-        `OrderbookBuilder.orderbook_add_msg()` or `OrderbookBuilder.build_from_source()`.
+        orderbook construction, prefer `get_next_msg()` with
+        `OrderbookBuilder.orderbook_add_msg()` or use
+        `OrderbookBuilder.build_from_source()`.
 
         Example
         -------
@@ -738,16 +735,59 @@ class StreamingBinaryLoader:
         >>> reader.open_stream("feed.bin", count_messages=False)
         0
         >>> while True:
-        ...     msg = reader.get_next_message()
-        ...     if msg == "END":
+        ...     msg = reader.get_next_msg()
+        ...     if msg is None:
         ...         break
-        ...     print(msg)
+        ...     print(msg["token"], msg["msg_type"])
 
-        Expected output
-        ---------------
-        Order Message: SeqNo 1, MsgLen 38, MsgType 'N', ...
-        Trade Message: SeqNo 2, MsgLen 45, MsgType 'T', ...
-        END
+        Expected output shape
+        ---------------------
+        {'message_kind': 'order', 'msg_type': 'N', ...}
+        {'message_kind': 'trade', 'msg_type': 'T', ...}
+        None
+        """
+        ...
+
+    def is_end_of_msg(self) -> bool:
+        """
+        Check whether the next call to `get_next_msg()`
+        would hit end-of-file.
+
+        Returns
+        -------
+        bool
+            True if there is no next message available.
+            False if another message can still be read.
+
+        Important
+        ---------
+        This method peeks ahead and then restores the file cursor, so it does
+        not consume the next message.
+        """
+        ...
+
+    def attach_symbol_master(self, master: "SymbolMaster") -> None:
+        """
+        Attach a loaded `SymbolMaster` to auto-enrich streamed messages.
+
+        After attaching, each `get_next_msg()` result may include enriched keys
+        when the token exists in the loaded contract master:
+
+        - `token_symbol`
+        - `strike_price`
+        - `option_type`
+        - `expiry`
+        - `lot_size`
+        - `name`
+        """
+        ...
+
+    def detach_symbol_master(self) -> None:
+        """
+        Remove the attached symbol master.
+
+        Subsequent streamed messages will return symbol-enrichment fields as
+        `None` again.
         """
         ...
 
@@ -1134,37 +1174,6 @@ class OrderbookBuilder:
         """
         ...
 
-    def get_orderbook_snapshot(self, token: int, levels: Optional[int] = None) -> Snapshot:
-        """
-        Alias for `get_snapshot()`.
-
-        Parameters
-        ----------
-        token:
-            Instrument token.
-        levels:
-            Number of bid/ask levels to return. Defaults to 5.
-
-        Returns
-        -------
-        Snapshot
-            Same dictionary returned by `get_snapshot()`.
-
-        Deep explanation
-        ----------------
-        Your Rust code directly delegates:
-
-            self.get_snapshot(py, token, levels)
-
-        This method exists for users who prefer the more explicit name.
-
-        Example
-        -------
-        >>> builder.get_orderbook_snapshot(1001, levels=5) == builder.get_snapshot(1001, levels=5)
-        True
-        """
-        ...
-
     def snapshot_header(self) -> str:
         """
         Return CSV header for `get_snapshot_row()` output.
@@ -1235,4 +1244,65 @@ class OrderbookBuilder:
         ...     f.write(builder.snapshot_header() + "\n")
         ...     f.write(builder.get_snapshot_row(1001, levels=5) + "\n")
         """
+        ...
+
+
+class FeedPathBuilder:
+    """
+    Build standardized NSE feed binary file paths.
+
+    Supports both FO and CM segments with default base path `/nas/50.30`.
+    """
+
+    def __init__(self) -> None:
+        ...
+
+    def build(
+        self,
+        segment: str,
+        stream_id: int,
+        day: int,
+        month: int,
+        year: int,
+        base_path: Optional[str] = None,
+    ) -> str:
+        ...
+
+    def build_and_verify(
+        self,
+        segment: str,
+        stream_id: int,
+        day: int,
+        month: int,
+        year: int,
+        base_path: Optional[str] = None,
+    ) -> str:
+        ...
+
+
+class SymbolMaster:
+    """
+    Load contract master CSV files and enrich token-based messages.
+    """
+
+    def __init__(self) -> None:
+        ...
+
+    def load(self, csv_path: str) -> int:
+        ...
+
+    def load_for_date(
+        self,
+        segment: str,
+        day: int,
+        month: int,
+        year: int,
+        base_path: Optional[str] = None,
+    ) -> int:
+        ...
+
+    def lookup(self, token: int) -> Dict[str, Any]:
+        ...
+
+    def enrich(self, msg: Dict[str, Any]) -> bool:
         ...

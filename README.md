@@ -259,6 +259,58 @@ Working:
 
 ---
 
+## 6.3.1 Direct access helpers (`messages`, `len(reader)`, `reader[index]`)
+
+`MessageCacheReader` also supports Python-style access helpers for convenience.
+
+```python
+reader = MessageCacheReader()
+reader.load_to_cache(FEED_FILE)
+
+print(len(reader))      # same as total cached messages
+print(reader[0])        # first formatted message string
+print(reader[-1])       # last formatted message string
+
+# Property form (returns full list of formatted messages)
+all_messages = reader.messages
+print(all_messages[0])
+```
+
+Working:
+
+- `len(reader)` returns number of cached messages.
+- `reader[index]` returns one formatted message string (supports negative index).
+- `reader.messages` returns the full formatted list (same output style as `get_all_messages()`).
+
+Practical note:
+
+- For very large files, prefer `reader[index]` when you only need a few messages.
+- `reader.messages` materializes all formatted strings and can use significant memory.
+
+### If you see `AttributeError: 'builtins.MessageCacheReader' object has no attribute 'messages'`
+
+This usually means your notebook/kernel is using an older extension build.
+
+```python
+import sys, fastreader
+from fastreader import MessageCacheReader
+
+reader = MessageCacheReader()
+print("python:", sys.executable)
+print("fastreader:", fastreader.__file__)
+print("has messages:", hasattr(reader, "messages"))
+print([x for x in dir(reader) if x in ("messages", "__getitem__", "__len__", "get_all_messages")])
+```
+
+If `has messages` is `False`:
+
+1. Rebuild/install extension in the same environment:
+    `maturin develop --release`
+2. Restart the notebook kernel.
+3. Re-run import and setup cells.
+
+---
+
 ## 6.4 `get_order_message()`
 
 Returns only order messages as Python dictionaries.

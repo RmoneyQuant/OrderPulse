@@ -13,7 +13,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::mem::size_of;
 
-use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyList, PyModule};
 
@@ -446,6 +446,34 @@ impl MessageCacheReader {
 
     pub fn get_all_messages(&self) -> Vec<String> {
         self.messages.iter().map(format_message).collect()
+    }
+
+    #[getter]
+    pub fn messages(&self) -> Vec<String> {
+        self.get_all_messages()
+    }
+
+    pub fn __len__(&self) -> usize {
+        self.messages.len()
+    }
+
+    pub fn __getitem__(&self, index: isize) -> PyResult<String> {
+        let len = self.messages.len() as isize;
+
+        if len == 0 {
+            return Err(PyIndexError::new_err("message cache is empty"));
+        }
+
+        let resolved = if index < 0 { len + index } else { index };
+
+        if resolved < 0 || resolved >= len {
+            return Err(PyIndexError::new_err(format!(
+                "message index {} out of range for cache of size {}",
+                index, len
+            )));
+        }
+
+        Ok(format_message(&self.messages[resolved as usize]))
     }
 
     pub fn get_order_message(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
@@ -1613,6 +1641,45 @@ mod tests {
         let reader = MessageCacheReader::new();
         let msgs = reader.get_all_messages();
         assert!(msgs.is_empty());
+    }
+
+    #[test]
+    fn test_messages_property_matches_get_all_messages() {
+        let packet = make_order_packet(b'N', b'B', 1, 1001, 500, 10, false);
+        let reader = MessageCacheReader {
+            file_path: None,
+            messages: Arc::new(vec![Message::Order(packet)]),
+        };
+
+        assert_eq!(reader.messages(), reader.get_all_messages());
+    }
+
+    #[test]
+    fn test_message_cache_reader_getitem_supports_negative_index() {
+        let first = make_order_packet(b'N', b'B', 11, 1001, 500, 10, false);
+        let second = make_trade_packet(22, 33, 2002, 700, 20, false);
+        let reader = MessageCacheReader {
+            file_path: None,
+            messages: Arc::new(vec![Message::Order(first), Message::Trade(second)]),
+        };
+
+        let first_msg = reader.__getitem__(0).expect("index 0 should work");
+        let last_msg = reader.__getitem__(-1).expect("negative index should work");
+
+        assert!(first_msg.contains("Token 1001"));
+        assert!(last_msg.contains("Token 2002"));
+    }
+
+    #[test]
+    fn test_message_cache_reader_getitem_out_of_bounds_is_err() {
+        let packet = make_order_packet(b'N', b'B', 1, 1001, 500, 10, false);
+        let reader = MessageCacheReader {
+            file_path: None,
+            messages: Arc::new(vec![Message::Order(packet)]),
+        };
+
+        assert!(reader.__getitem__(1).is_err());
+        assert!(reader.__getitem__(-2).is_err());
     }
 
     #[test]

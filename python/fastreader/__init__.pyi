@@ -421,6 +421,20 @@ class MessageCacheReader:
         """
         ...
 
+    @property
+    def messages(self) -> list[str]:
+        """
+        Read-only property exposing cached messages as formatted strings.
+
+        Equivalent to ``get_all_messages()``.
+        """
+        ...
+
+    def __len__(self) -> int: ...
+
+    @overload
+    def __getitem__(self, index: int) -> str: ...
+
     def load_to_cache(self, file_path: str) -> int:
         """
         Load a binary feed file fully into Rust-side memory.

@@ -4,5 +4,5 @@ requires-python = ">=3.9"
 
 [[package]]
 name = "orderpulse"
-version = "0.2.31"
+version = "0.2.52"
 source = { editable = "." }

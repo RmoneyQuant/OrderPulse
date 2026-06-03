@@ -15,8 +15,17 @@ classifiers = [
 	"Operating System :: POSIX :: Linux",
 ]
 
+[project.urls]
+Homepage = "https://github.com/RmoneyQuant/OrderPulse"
+Repository = "https://github.com/RmoneyQuant/OrderPulse"
+Source = "https://github.com/RmoneyQuant/OrderPulse"
+Documentation = "https://github.com/RmoneyQuant/OrderPulse#readme"
+
+
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"
 module-name = "fastreader.fastreader"
+
+

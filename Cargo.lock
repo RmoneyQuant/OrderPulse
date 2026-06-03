@@ -3,15 +3,6 @@
 version = 4
 
 [[package]]
-name = "OrderPluse"
-version = "0.2.46"
-dependencies = [
- "memmap2",
- "pyo3",
- "rustc-hash",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -67,6 +58,15 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "orderpulse"
+version = "0.2.52"
+dependencies = [
+ "memmap2",
+ "pyo3",
+ "rustc-hash",
+]
 
 [[package]]
 name = "portable-atomic"

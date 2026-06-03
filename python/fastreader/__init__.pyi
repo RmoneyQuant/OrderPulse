@@ -541,8 +541,8 @@ class MessageCacheReader:
         Example
         -------
         >>> trades = reader.get_trade_message()
-        >>> trades[0]
-        "Trade Message: SeqNo 10, MsgLen 45, MsgType 'T', ExchTs 1700000010, LocalTs 1700000011, BuyOrderId 101, SellOrderId 202, Token 1001, Price 2250100, Quantity 25, Missed 0"
+        >>> trades[0]["message_kind"]
+        'trade'
         """
         ...
 
@@ -552,7 +552,7 @@ class MessageCacheReader:
 
         Returns
         -------
-        list[str]
+        list[dict[str, Any]]
             Same output as `get_trade_message()`.
 
         Deep explanation
@@ -891,32 +891,30 @@ class OrderbookBuilder:
         """
         ...
 
-    def orderbook_add_msg(self, source: StreamingBinaryLoader) -> bool:
+    def orderbook_add_msg(self, msg: dict[str, Any]) -> bool:
         """
-        Read exactly one message from a `StreamingBinaryLoader` and apply it.
+        Apply one decoded message dictionary to the orderbook.
 
         Parameters
         ----------
-        source:
-            An opened `StreamingBinaryLoader` instance.
+        msg:
+            One decoded message dictionary such as the output from
+            `StreamingBinaryLoader.get_next_msg()`.
 
         Returns
         -------
         bool
-            True if one message was read and applied to the orderbook.
-            False if the stream ended or the message was filtered/skipped.
+            True if the message was accepted and applied.
+            False if the message was filtered/skipped.
 
         Raises
         ------
         TypeError
-            Raised if `source` is not a `StreamingBinaryLoader`.
-        RuntimeError
-            Raised if reading the stream fails.
+            Raised if `msg` is not a dictionary with required keys.
 
         Deep explanation
         ----------------
-        This method is the smallest streaming step. It pulls one raw Rust
-        message from the stream and immediately applies it through the same
+        This method applies a single already-decoded message through the same
         internal processing path as bulk builds.
 
         Use this when you want manual control over the stream loop:
@@ -925,8 +923,11 @@ class OrderbookBuilder:
         >>> reader.open_stream("feed.bin", count_messages=False)
         0
         >>> builder = OrderbookBuilder()
-        >>> while builder.orderbook_add_msg(reader):
-        ...     pass
+        >>> while True:
+        ...     msg = reader.get_next_msg()
+        ...     if msg is None:
+        ...         break
+        ...     builder.orderbook_add_msg(msg)
         >>> snapshot = builder.get_snapshot(token=1001, levels=5)
 
         For most users, `build_from_source(reader)` is easier and safer.
@@ -1089,6 +1090,17 @@ class OrderbookBuilder:
         >>> builder = OrderbookBuilder()
         >>> builder.build_from_source(cache)
         250000
+        """
+        ...
+
+    def get_active_tokens(self) -> list[int]:
+        """
+        Return tokens currently active in the internal orderbook state.
+
+        Returns
+        -------
+        list[int]
+            Token ids that currently have orderbook data.
         """
         ...
 
@@ -1279,6 +1291,9 @@ class FeedPathBuilder:
     ) -> str:
         ...
 
+    def __repr__(self) -> str:
+        ...
+
 
 class SymbolMaster:
     """
@@ -1305,4 +1320,10 @@ class SymbolMaster:
         ...
 
     def enrich(self, msg: Dict[str, Any]) -> bool:
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    def __repr__(self) -> str:
         ...

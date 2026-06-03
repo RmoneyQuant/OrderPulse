@@ -4,10 +4,16 @@ build-backend = "maturin"
 
 [project]
 name = "OrderPulse"
-version = "0.2.46"
+version = "0.2.52"
 requires-python = ">=3.9"
 description = "High-performance exchange feed parser and orderflow analytics engine with Rust and Python bindings"
 readme = { file = "README.md", content-type = "text/markdown" } 
+classifiers = [
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Rust",
+	"License :: Other/Proprietary License",
+	"Operating System :: POSIX :: Linux",
+]
 
 
 [tool.maturin]

@@ -1,6 +1,7 @@
 """Python package entrypoint for the Rust-backed `fastreader` extension."""
 
 from .fastreader import (
+    CachedMessage,
     FeedPathBuilder,
     MessageCacheReader,
     OrderbookBuilder,
@@ -9,6 +10,7 @@ from .fastreader import (
 )
 
 __all__ = [
+    "CachedMessage",
     "MessageCacheReader",
     "StreamingBinaryLoader",
     "OrderbookBuilder",

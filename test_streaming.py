@@ -1,23 +1,19 @@
 from fastreader import (
-		MessageCacheReader,
-		StreamingBinaryLoader,
-		OrderbookBuilder,
-		SymbolMaster,
-		FeedPathBuilder,
+    MessageCacheReader,
+    StreamingBinaryLoader,
+    OrderbookBuilder,
+    SymbolMaster,
+    FeedPathBuilder,
 )
 
 from fastreader import MessageCacheReader
 
+
+FEED_FILE = "/nas/50.30/NSE_CM/Feed_CM_StreamID_2_29_12_2025.bin"
 reader = MessageCacheReader()
-print(type(reader).__name__)
+count = reader.load_to_cache(FEED_FILE)
 
-from fastreader import MessageCacheReader
+print("Loaded messages:", count)
+print(reader.messages[0])
 
-reader = MessageCacheReader()
-total = reader.load_to_cache("/nas/50.30/NSE_CM/Feed_CM_StreamID_2_29_12_2025.bin")
-print(total)
-
-messages = reader.get_all_messages()
-
-print("Total:", len(messages))
-print(messages[0])
+print("Hi")

@@ -4,6 +4,15 @@ High-performance Python bindings for reading NSE binary order/trade feed files, 
 
 This library is written in Rust for speed and exposed to Python using PyO3. It is designed for users who need to parse NSE CM/FO binary feed files, stream messages one by one, cache full files in memory, attach symbol metadata, and build order book depth from order and trade messages.
 
+## Project links
+
+- Homepage: https://github.com/RmoneyQuant/OrderPulse
+- Source: https://github.com/RmoneyQuant/OrderPulse/tree/main/src
+- Repository: https://github.com/RmoneyQuant/OrderPulse
+- Documentation: https://github.com/RmoneyQuant/OrderPulse#readme
+- Issues: https://github.com/RmoneyQuant/OrderPulse/issues
+- Changelog: https://github.com/RmoneyQuant/OrderPulse/blob/main/CHANGELOG.md
+
 ---
 
 ## 1. What this library does
@@ -229,33 +238,38 @@ Working:
 
 ## 6.3 `get_all_messages()`
 
-Returns all cached messages as readable strings.
+Returns all cached messages as structured `CachedMessage` objects.
 
 ```python
 messages = reader.get_all_messages()
 
 print("Total:", len(messages))
-print(messages[0])
+first = messages[0]
+print(first.message_kind, first.seq_no, first.msg_type)
+print(first.token, first.price, first.trade_price)
 ```
 
 Expected output example for an order message:
 
 ```text
 Total: 2500000
-Order Message: SeqNo 42, MsgLen 10, MsgType 'N', ExchTs 100000, LocalTs 200000, OrderId 55, Token 1001, Side 'B', Price 500, Quantity 100, Missed 0
+order 42 N
+1001 500 None
 ```
 
 Expected output example for a trade message:
 
 ```text
-Trade Message: SeqNo 99, MsgLen 10, MsgType 'T', ExchTs 300000, LocalTs 400000, BuyOrderId 10, SellOrderId 20, Token 5000, Price 750, Quantity 30, Missed 1
+trade 99 T
+5000 None 750
 ```
 
 Working:
 
-- Converts every cached Rust message into a formatted string.
-- Useful for quick debugging and printing.
-- Not ideal for structured analysis because it returns strings, not dictionaries.
+- Converts every cached Rust message into a typed Python object with attribute access.
+- Common fields are always available: `message_kind`, `seq_no`, `msg_len`, `stream_id`, `msg_type`, `exch_ts`, `local_ts`, `flags`, `token`.
+- Order-only fields are optional: `order_type`, `order_id`, `price`, `quantity`.
+- Trade-only fields are optional: `buy_order_id`, `sell_order_id`, `trade_price`, `trade_quantity`.
 
 ---
 
@@ -268,24 +282,24 @@ reader = MessageCacheReader()
 reader.load_to_cache(FEED_FILE)
 
 print(len(reader))      # same as total cached messages
-print(reader[0])        # first formatted message string
-print(reader[-1])       # last formatted message string
+print(reader[0])        # first CachedMessage object
+print(reader[-1])       # last CachedMessage object
 
-# Property form (returns full list of formatted messages)
+# Property form (returns full list of CachedMessage objects)
 all_messages = reader.messages
-print(all_messages[0])
+print(all_messages[0].message_kind, all_messages[0].seq_no)
 ```
 
 Working:
 
 - `len(reader)` returns number of cached messages.
-- `reader[index]` returns one formatted message string (supports negative index).
-- `reader.messages` returns the full formatted list (same output style as `get_all_messages()`).
+- `reader[index]` returns one `CachedMessage` object (supports negative index).
+- `reader.messages` returns the full structured list (same output type as `get_all_messages()`).
 
 Practical note:
 
 - For very large files, prefer `reader[index]` when you only need a few messages.
-- `reader.messages` materializes all formatted strings and can use significant memory.
+- `reader.messages` materializes all cached objects and can use significant memory.
 
 ### If you see `AttributeError: 'builtins.MessageCacheReader' object has no attribute 'messages'`
 

@@ -373,6 +373,33 @@ class FullDepthSnapshot(TypedDict):
     asks: list[PriceLevel]
 
 
+class CachedMessage:
+    """
+    Structured message object returned by `MessageCacheReader`.
+
+    Common fields are always populated. Order-only and trade-only fields are
+    represented as `None` when not applicable to that message kind.
+    """
+
+    message_kind: Literal["order", "trade"]
+    seq_no: int
+    msg_len: int
+    stream_id: int
+    msg_type: str
+    exch_ts: int
+    local_ts: int
+    flags: bool
+    token: int
+    order_type: Optional[str]
+    order_id: Optional[int]
+    price: Optional[int]
+    quantity: Optional[int]
+    buy_order_id: Optional[int]
+    sell_order_id: Optional[int]
+    trade_price: Optional[int]
+    trade_quantity: Optional[int]
+
+
 class MessageCacheReader:
     """
     RAM-based binary feed reader.
@@ -422,9 +449,9 @@ class MessageCacheReader:
         ...
 
     @property
-    def messages(self) -> list[str]:
+    def messages(self) -> list[CachedMessage]:
         """
-        Read-only property exposing cached messages as formatted strings.
+        Read-only property exposing cached messages as structured objects.
 
         Equivalent to ``get_all_messages()``.
         """
@@ -433,7 +460,7 @@ class MessageCacheReader:
     def __len__(self) -> int: ...
 
     @overload
-    def __getitem__(self, index: int) -> str: ...
+    def __getitem__(self, index: int) -> CachedMessage: ...
 
     def load_to_cache(self, file_path: str) -> int:
         """
@@ -481,37 +508,14 @@ class MessageCacheReader:
         """
         ...
 
-    def get_all_messages(self) -> list[str]:
+    def get_all_messages(self) -> list[CachedMessage]:
         """
-        Return all cached messages formatted as human-readable strings.
+        Return all cached messages as structured objects.
 
         Returns
         -------
-        list[str]
+        list[CachedMessage]
             Every cached order and trade message in the order they were read.
-
-        Deep explanation
-        ----------------
-        This method does not return raw structs. It returns formatted text from
-        Rust's `format_message()` helper. This is mainly for debugging, logging,
-        and understanding the feed, not for high-performance analytics.
-
-        Order message format looks like:
-
-            "Order Message: SeqNo ..., MsgLen ..., MsgType 'N', ExchTs ..., LocalTs ..., OrderId ..., Token ..., Side 'B', Price ..., Quantity ..., Missed 0"
-
-        Trade message format looks like:
-
-            "Trade Message: SeqNo ..., MsgLen ..., MsgType 'T', ExchTs ..., LocalTs ..., BuyOrderId ..., SellOrderId ..., Token ..., Price ..., Quantity ..., Missed 0"
-
-        Example
-        -------
-        >>> reader = MessageCacheReader()
-        >>> reader.load_to_cache("feed.bin")
-        250000
-        >>> messages = reader.get_all_messages()
-        >>> messages[0]
-        "Order Message: SeqNo 1, MsgLen 38, MsgType 'N', ExchTs 1700000000, LocalTs 1700000001, OrderId 101, Token 1001, Side 'B', Price 2250000, Quantity 75, Missed 0"
         """
         ...
 

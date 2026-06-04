@@ -3,19 +3,19 @@
   "configurations": [
     
     {
-      "name": "Debug OrderPluse",
+      "name": "Debug OrderPulse",
       "type": "lldb",
       "request": "launch",
       "cargo": {
         "args": [
           "build",
           "--package",
-          "OrderPluse",
+          "orderpulse",
           "--bin",
-          "OrderPluse"
+          "orderpulse"
         ],
         "filter": {
-          "name": "OrderPluse",
+          "name": "orderpulse",
           "kind": "bin"
         }
       },
@@ -39,7 +39,7 @@
         "args": [
           "test",
           "--package",
-          "OrderPluse",
+          "orderpulse",
           "--lib",
           "--no-run"
         ]
@@ -61,7 +61,7 @@
         "args": [
           "test",
           "--package",
-          "OrderPluse",
+          "orderpulse",
           "--lib",
           "--no-run"
         ]
@@ -85,7 +85,7 @@
         "args": [
           "test",
           "--package",
-          "OrderPluse",
+          "orderpulse",
           "--lib",
           "--no-run"
         ]

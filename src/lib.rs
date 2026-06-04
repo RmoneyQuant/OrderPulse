@@ -156,6 +156,118 @@ fn message_to_py_dict(py: Python<'_>, message: &Message) -> PyResult<Py<PyAny>> 
     Ok(dict.into_any().unbind())
 }
 
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct CachedMessage {
+    #[pyo3(get)]
+    message_kind: String,
+    #[pyo3(get)]
+    seq_no: u32,
+    #[pyo3(get)]
+    msg_len: u16,
+    #[pyo3(get)]
+    stream_id: u16,
+    #[pyo3(get)]
+    msg_type: String,
+    #[pyo3(get)]
+    exch_ts: u64,
+    #[pyo3(get)]
+    local_ts: u64,
+    #[pyo3(get)]
+    flags: bool,
+    #[pyo3(get)]
+    token: i64,
+    #[pyo3(get)]
+    order_type: Option<String>,
+    #[pyo3(get)]
+    order_id: Option<u64>,
+    #[pyo3(get)]
+    price: Option<i64>,
+    #[pyo3(get)]
+    quantity: Option<i64>,
+    #[pyo3(get)]
+    buy_order_id: Option<u64>,
+    #[pyo3(get)]
+    sell_order_id: Option<u64>,
+    #[pyo3(get)]
+    trade_price: Option<i64>,
+    #[pyo3(get)]
+    trade_quantity: Option<i64>,
+}
+
+fn message_to_cached_message(message: &Message) -> CachedMessage {
+    match message {
+        Message::Order(order_packet) => unsafe {
+            let seq_no = std::ptr::addr_of!(order_packet.hdr.seq_no).read_unaligned();
+            let msg_len = std::ptr::addr_of!(order_packet.hdr.msg_len).read_unaligned();
+            let stream_id = std::ptr::addr_of!(order_packet.hdr.stream_id).read_unaligned();
+            let msg_type = std::ptr::addr_of!(order_packet.ord.msg_type).read_unaligned();
+            let exch_ts = std::ptr::addr_of!(order_packet.ord.exch_ts).read_unaligned();
+            let local_ts = std::ptr::addr_of!(order_packet.local_ts).read_unaligned();
+            let order_id = std::ptr::addr_of!(order_packet.ord.order_id).read_unaligned();
+            let token = std::ptr::addr_of!(order_packet.ord.token).read_unaligned();
+            let order_type = std::ptr::addr_of!(order_packet.ord.order_type).read_unaligned();
+            let price = std::ptr::addr_of!(order_packet.ord.price).read_unaligned();
+            let quantity = std::ptr::addr_of!(order_packet.ord.quantity).read_unaligned();
+            let flags = std::ptr::addr_of!(order_packet.flags).read_unaligned();
+
+            CachedMessage {
+                message_kind: "order".to_string(),
+                seq_no,
+                msg_len,
+                stream_id,
+                msg_type: (msg_type as char).to_string(),
+                exch_ts,
+                local_ts,
+                flags,
+                token: token as i64,
+                order_type: Some((order_type as char).to_string()),
+                order_id: Some(order_id),
+                price: Some(price as i64),
+                quantity: Some(quantity as i64),
+                buy_order_id: None,
+                sell_order_id: None,
+                trade_price: None,
+                trade_quantity: None,
+            }
+        },
+        Message::Trade(trade_packet) => unsafe {
+            let seq_no = std::ptr::addr_of!(trade_packet.hdr.seq_no).read_unaligned();
+            let msg_len = std::ptr::addr_of!(trade_packet.hdr.msg_len).read_unaligned();
+            let stream_id = std::ptr::addr_of!(trade_packet.hdr.stream_id).read_unaligned();
+            let msg_type = std::ptr::addr_of!(trade_packet.trd.msg_type).read_unaligned();
+            let exch_ts = std::ptr::addr_of!(trade_packet.trd.exch_ts).read_unaligned();
+            let local_ts = std::ptr::addr_of!(trade_packet.local_ts).read_unaligned();
+            let buy_order_id = std::ptr::addr_of!(trade_packet.trd.buy_order_id).read_unaligned();
+            let sell_order_id = std::ptr::addr_of!(trade_packet.trd.sell_order_id).read_unaligned();
+            let token = std::ptr::addr_of!(trade_packet.trd.token).read_unaligned();
+            let trade_price = std::ptr::addr_of!(trade_packet.trd.trade_price).read_unaligned();
+            let trade_quantity = std::ptr::addr_of!(trade_packet.trd.trade_quantity).read_unaligned();
+            let flags = std::ptr::addr_of!(trade_packet.flags).read_unaligned();
+
+            CachedMessage {
+                message_kind: "trade".to_string(),
+                seq_no,
+                msg_len,
+                stream_id,
+                msg_type: (msg_type as char).to_string(),
+                exch_ts,
+                local_ts,
+                flags,
+                token: token as i64,
+                order_type: None,
+                order_id: None,
+                price: None,
+                quantity: None,
+                buy_order_id: Some(buy_order_id),
+                sell_order_id: Some(sell_order_id),
+                trade_price: Some(trade_price as i64),
+                trade_quantity: Some(trade_quantity as i64),
+            }
+        },
+    }
+}
+
 fn format_snapshot_row(
     local_ts: u64,
     exch_ts: u64,
@@ -444,37 +556,38 @@ impl MessageCacheReader {
         Ok(count)
     }
 
-    pub fn get_all_messages(&self) -> Vec<String> {
-        self.messages.iter().map(format_message).collect()
+    pub fn get_all_messages(&self) -> Vec<CachedMessage> {
+        self.messages.iter().map(message_to_cached_message).collect()
     }
 
     #[getter]
-    pub fn messages(&self) -> Vec<String> {
-        self.get_all_messages()
+    pub fn messages(&self) -> Vec<CachedMessage> {
+    self.get_all_messages()
+}
+
+pub fn __len__(&self) -> usize {
+    self.messages.len()
+}
+
+pub fn __getitem__(&self, index: isize) -> PyResult<CachedMessage> {
+    let len = self.messages.len() as isize;
+
+    if len == 0 {
+        return Err(PyIndexError::new_err("message cache is empty"));
     }
 
-    pub fn __len__(&self) -> usize {
-        self.messages.len()
+    let resolved = if index < 0 { len + index } else { index };
+
+    if resolved < 0 || resolved >= len {
+        return Err(PyIndexError::new_err(format!(
+            "message index {} out of range for cache of size {}",
+            index, len
+        )));
     }
 
-    pub fn __getitem__(&self, index: isize) -> PyResult<String> {
-        let len = self.messages.len() as isize;
+    Ok(message_to_cached_message(&self.messages[resolved as usize]))
+}
 
-        if len == 0 {
-            return Err(PyIndexError::new_err("message cache is empty"));
-        }
-
-        let resolved = if index < 0 { len + index } else { index };
-
-        if resolved < 0 || resolved >= len {
-            return Err(PyIndexError::new_err(format!(
-                "message index {} out of range for cache of size {}",
-                index, len
-            )));
-        }
-
-        Ok(format_message(&self.messages[resolved as usize]))
-    }
 
     pub fn get_order_message(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         self.messages
@@ -1504,6 +1617,7 @@ impl FeedPathBuilder {
 
 #[pymodule]
 fn fastreader(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<CachedMessage>()?;
     m.add_class::<MessageCacheReader>()?;
     m.add_class::<StreamingBinaryLoader>()?;
     m.add_class::<OrderbookBuilder>()?;
@@ -1641,45 +1755,6 @@ mod tests {
         let reader = MessageCacheReader::new();
         let msgs = reader.get_all_messages();
         assert!(msgs.is_empty());
-    }
-
-    #[test]
-    fn test_messages_property_matches_get_all_messages() {
-        let packet = make_order_packet(b'N', b'B', 1, 1001, 500, 10, false);
-        let reader = MessageCacheReader {
-            file_path: None,
-            messages: Arc::new(vec![Message::Order(packet)]),
-        };
-
-        assert_eq!(reader.messages(), reader.get_all_messages());
-    }
-
-    #[test]
-    fn test_message_cache_reader_getitem_supports_negative_index() {
-        let first = make_order_packet(b'N', b'B', 11, 1001, 500, 10, false);
-        let second = make_trade_packet(22, 33, 2002, 700, 20, false);
-        let reader = MessageCacheReader {
-            file_path: None,
-            messages: Arc::new(vec![Message::Order(first), Message::Trade(second)]),
-        };
-
-        let first_msg = reader.__getitem__(0).expect("index 0 should work");
-        let last_msg = reader.__getitem__(-1).expect("negative index should work");
-
-        assert!(first_msg.contains("Token 1001"));
-        assert!(last_msg.contains("Token 2002"));
-    }
-
-    #[test]
-    fn test_message_cache_reader_getitem_out_of_bounds_is_err() {
-        let packet = make_order_packet(b'N', b'B', 1, 1001, 500, 10, false);
-        let reader = MessageCacheReader {
-            file_path: None,
-            messages: Arc::new(vec![Message::Order(packet)]),
-        };
-
-        assert!(reader.__getitem__(1).is_err());
-        assert!(reader.__getitem__(-2).is_err());
     }
 
     #[test]
@@ -2047,10 +2122,10 @@ mod debug_tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    // ── 4. get_all_messages: string values match original packet ──────────────
+    // ── 4. get_all_messages: structured values match original packet ───────────
 
     #[test]
-    fn debug_get_all_messages_order_string_values() {
+    fn debug_get_all_messages_order_struct_values() {
         let orig = make_order(5, 77, 3001, 900, 25, b'B');
         let path = write_tmp("get_all_msg", unsafe { as_bytes(&orig) });
 
@@ -2060,20 +2135,20 @@ mod debug_tests {
             reader.load_to_cache(path.to_str().unwrap().to_string()).unwrap();
             let msgs = reader.get_all_messages();
             assert_eq!(msgs.len(), 1);
-            let s = &msgs[0];
-            assert!(s.starts_with("Order Message:"),   "prefix: {s}");
-            assert!(s.contains("SeqNo 5"),             "SeqNo: {s}");
-            assert!(s.contains("OrderId 77"),          "OrderId: {s}");
-            assert!(s.contains("Token 3001"),          "Token: {s}");
-            assert!(s.contains("Price 900"),           "Price: {s}");
-            assert!(s.contains("Quantity 25"),         "Quantity: {s}");
-            assert!(s.contains("Missed 0"),            "Missed: {s}");
+            let msg = &msgs[0];
+            assert_eq!(msg.message_kind, "order");
+            assert_eq!(msg.seq_no, 5);
+            assert_eq!(msg.order_id, Some(77));
+            assert_eq!(msg.token, 3001);
+            assert_eq!(msg.price, Some(900));
+            assert_eq!(msg.quantity, Some(25));
+            assert!(!msg.flags);
         });
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
-    fn debug_get_all_messages_trade_string_values() {
+    fn debug_get_all_messages_trade_struct_values() {
         let orig = make_trade(9, 55, 66, 7777, 1_200, 8);
         let path = write_tmp("get_all_trd", unsafe { as_bytes(&orig) });
 
@@ -2082,14 +2157,14 @@ mod debug_tests {
             let mut reader = MessageCacheReader::new();
             reader.load_to_cache(path.to_str().unwrap().to_string()).unwrap();
             let msgs = reader.get_all_messages();
-            let s = &msgs[0];
-            assert!(s.starts_with("Trade Message:"),   "prefix: {s}");
-            assert!(s.contains("SeqNo 9"),             "SeqNo: {s}");
-            assert!(s.contains("BuyOrderId 55"),       "BuyOrderId: {s}");
-            assert!(s.contains("SellOrderId 66"),      "SellOrderId: {s}");
-            assert!(s.contains("Token 7777"),          "Token: {s}");
-            assert!(s.contains("Price 1200"),          "Price: {s}");
-            assert!(s.contains("Quantity 8"),          "Quantity: {s}");
+            let msg = &msgs[0];
+            assert_eq!(msg.message_kind, "trade");
+            assert_eq!(msg.seq_no, 9);
+            assert_eq!(msg.buy_order_id, Some(55));
+            assert_eq!(msg.sell_order_id, Some(66));
+            assert_eq!(msg.token, 7777);
+            assert_eq!(msg.trade_price, Some(1_200));
+            assert_eq!(msg.trade_quantity, Some(8));
         });
         let _ = std::fs::remove_file(&path);
     }

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "OrderPulse"
-version = "0.2.52"
+version = "0.2.54"
 requires-python = ">=3.9"
 description = "High-performance exchange feed parser and orderflow analytics engine with Rust and Python bindings"
 readme = { file = "README.md", content-type = "text/markdown" } 
@@ -17,9 +17,11 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/RmoneyQuant/OrderPulse"
+Source = "https://github.com/RmoneyQuant/OrderPulse/tree/main/src"
 Repository = "https://github.com/RmoneyQuant/OrderPulse"
-Source = "https://github.com/RmoneyQuant/OrderPulse"
 Documentation = "https://github.com/RmoneyQuant/OrderPulse#readme"
+Issues = "https://github.com/RmoneyQuant/OrderPulse/issues"
+Changelog = "https://github.com/RmoneyQuant/OrderPulse/blob/main/CHANGELOG.md"
 
 
 

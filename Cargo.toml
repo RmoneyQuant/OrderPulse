@@ -1,0 +1,18 @@
+[package]
+name = "OrderPluse"
+version = "0.2.58"
+edition = "2021"
+
+
+
+[lib]
+name = "fastreader"
+crate-type = ["cdylib"]
+
+
+
+[dependencies]
+memmap2 = "0.9"
+
+pyo3 = { version = "0.22", features = ["extension-module"] }
+rustc-hash = "2"

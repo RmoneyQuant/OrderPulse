@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+OrderPulse/target/
+OrderPulse/python/fastreader/*.so
+
+.vscode
+.github
+.tmp_build
+.pytest_cache
+.idea

@@ -1,0 +1,36 @@
+
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "orderpulse"
+version = "0.2.58"
+description = "High-performance Rust-powered Python library for reading NSE binary order and trade feed data."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "RmoneyQuant" }
+]
+license = { text = "Other/Proprietary License" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+]
+
+[project.urls]
+Homepage = "https://github.com/RmoneyQuant/OrderPulse"
+Documentation = "https://github.com/RmoneyQuant/OrderPulse#readme"
+Repository = "https://github.com/RmoneyQuant/OrderPulse"
+Source = "https://github.com/RmoneyQuant/OrderPulse"
+Issues = "https://github.com/RmoneyQuant/OrderPulse/issues"
+Changelog = "https://github.com/RmoneyQuant/OrderPulse/releases"
+
+[tool.maturin]
+module-name = "fastreader"
+features = ["pyo3/extension-module"]
+python-source = "python"

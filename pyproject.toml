@@ -1,33 +1,35 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.7,<2"]
 build-backend = "maturin"
 
 [project]
-name = "OrderPulse"
-version = "0.2.54"
+name = "orderpulse"
+version = "0.2.58"
+description = "High-performance Rust-powered Python library for reading NSE binary order and trade feed data."
+readme = "README.md"
 requires-python = ">=3.9"
-description = "High-performance exchange feed parser and orderflow analytics engine with Rust and Python bindings"
-readme = { file = "README.md", content-type = "text/markdown" } 
+authors = [
+    { name = "RmoneyQuant" }
+]
+license = { text = "Other/Proprietary License" }
 classifiers = [
-	"Programming Language :: Python :: 3",
-	"Programming Language :: Rust",
-	"License :: Other/Proprietary License",
-	"Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
 ]
 
 [project.urls]
 Homepage = "https://github.com/RmoneyQuant/OrderPulse"
-Source = "https://github.com/RmoneyQuant/OrderPulse/tree/main/src"
-Repository = "https://github.com/RmoneyQuant/OrderPulse"
 Documentation = "https://github.com/RmoneyQuant/OrderPulse#readme"
+Repository = "https://github.com/RmoneyQuant/OrderPulse"
+Source = "https://github.com/RmoneyQuant/OrderPulse"
 Issues = "https://github.com/RmoneyQuant/OrderPulse/issues"
-Changelog = "https://github.com/RmoneyQuant/OrderPulse/blob/main/CHANGELOG.md"
-
-
+Changelog = "https://github.com/RmoneyQuant/OrderPulse/releases"
 
 [tool.maturin]
+module-name = "fastreader"
 features = ["pyo3/extension-module"]
 python-source = "python"
-module-name = "fastreader.fastreader"
-
-

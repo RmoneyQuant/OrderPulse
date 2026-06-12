@@ -156,118 +156,6 @@ fn message_to_py_dict(py: Python<'_>, message: &Message) -> PyResult<Py<PyAny>> 
     Ok(dict.into_any().unbind())
 }
 
-#[pyclass]
-#[derive(Clone, Debug)]
-pub struct CachedMessage {
-    #[pyo3(get)]
-    message_kind: String,
-    #[pyo3(get)]
-    seq_no: u32,
-    #[pyo3(get)]
-    msg_len: u16,
-    #[pyo3(get)]
-    stream_id: u16,
-    #[pyo3(get)]
-    msg_type: String,
-    #[pyo3(get)]
-    exch_ts: u64,
-    #[pyo3(get)]
-    local_ts: u64,
-    #[pyo3(get)]
-    flags: bool,
-    #[pyo3(get)]
-    token: i64,
-    #[pyo3(get)]
-    order_type: Option<String>,
-    #[pyo3(get)]
-    order_id: Option<u64>,
-    #[pyo3(get)]
-    price: Option<i64>,
-    #[pyo3(get)]
-    quantity: Option<i64>,
-    #[pyo3(get)]
-    buy_order_id: Option<u64>,
-    #[pyo3(get)]
-    sell_order_id: Option<u64>,
-    #[pyo3(get)]
-    trade_price: Option<i64>,
-    #[pyo3(get)]
-    trade_quantity: Option<i64>,
-}
-
-fn message_to_cached_message(message: &Message) -> CachedMessage {
-    match message {
-        Message::Order(order_packet) => unsafe {
-            let seq_no = std::ptr::addr_of!(order_packet.hdr.seq_no).read_unaligned();
-            let msg_len = std::ptr::addr_of!(order_packet.hdr.msg_len).read_unaligned();
-            let stream_id = std::ptr::addr_of!(order_packet.hdr.stream_id).read_unaligned();
-            let msg_type = std::ptr::addr_of!(order_packet.ord.msg_type).read_unaligned();
-            let exch_ts = std::ptr::addr_of!(order_packet.ord.exch_ts).read_unaligned();
-            let local_ts = std::ptr::addr_of!(order_packet.local_ts).read_unaligned();
-            let order_id = std::ptr::addr_of!(order_packet.ord.order_id).read_unaligned();
-            let token = std::ptr::addr_of!(order_packet.ord.token).read_unaligned();
-            let order_type = std::ptr::addr_of!(order_packet.ord.order_type).read_unaligned();
-            let price = std::ptr::addr_of!(order_packet.ord.price).read_unaligned();
-            let quantity = std::ptr::addr_of!(order_packet.ord.quantity).read_unaligned();
-            let flags = std::ptr::addr_of!(order_packet.flags).read_unaligned();
-
-            CachedMessage {
-                message_kind: "order".to_string(),
-                seq_no,
-                msg_len,
-                stream_id,
-                msg_type: (msg_type as char).to_string(),
-                exch_ts,
-                local_ts,
-                flags,
-                token: token as i64,
-                order_type: Some((order_type as char).to_string()),
-                order_id: Some(order_id),
-                price: Some(price as i64),
-                quantity: Some(quantity as i64),
-                buy_order_id: None,
-                sell_order_id: None,
-                trade_price: None,
-                trade_quantity: None,
-            }
-        },
-        Message::Trade(trade_packet) => unsafe {
-            let seq_no = std::ptr::addr_of!(trade_packet.hdr.seq_no).read_unaligned();
-            let msg_len = std::ptr::addr_of!(trade_packet.hdr.msg_len).read_unaligned();
-            let stream_id = std::ptr::addr_of!(trade_packet.hdr.stream_id).read_unaligned();
-            let msg_type = std::ptr::addr_of!(trade_packet.trd.msg_type).read_unaligned();
-            let exch_ts = std::ptr::addr_of!(trade_packet.trd.exch_ts).read_unaligned();
-            let local_ts = std::ptr::addr_of!(trade_packet.local_ts).read_unaligned();
-            let buy_order_id = std::ptr::addr_of!(trade_packet.trd.buy_order_id).read_unaligned();
-            let sell_order_id = std::ptr::addr_of!(trade_packet.trd.sell_order_id).read_unaligned();
-            let token = std::ptr::addr_of!(trade_packet.trd.token).read_unaligned();
-            let trade_price = std::ptr::addr_of!(trade_packet.trd.trade_price).read_unaligned();
-            let trade_quantity = std::ptr::addr_of!(trade_packet.trd.trade_quantity).read_unaligned();
-            let flags = std::ptr::addr_of!(trade_packet.flags).read_unaligned();
-
-            CachedMessage {
-                message_kind: "trade".to_string(),
-                seq_no,
-                msg_len,
-                stream_id,
-                msg_type: (msg_type as char).to_string(),
-                exch_ts,
-                local_ts,
-                flags,
-                token: token as i64,
-                order_type: None,
-                order_id: None,
-                price: None,
-                quantity: None,
-                buy_order_id: Some(buy_order_id),
-                sell_order_id: Some(sell_order_id),
-                trade_price: Some(trade_price as i64),
-                trade_quantity: Some(trade_quantity as i64),
-            }
-        },
-    }
-}
-
 fn format_snapshot_row(
     local_ts: u64,
     exch_ts: u64,
@@ -527,7 +415,6 @@ fn count_messages_in_file(path: &str) -> std::io::Result<usize> {
 
     Ok(count)
 }
-
 #[pyclass]
 pub struct MessageCacheReader {
     file_path: Option<String>,
@@ -556,37 +443,40 @@ impl MessageCacheReader {
         Ok(count)
     }
 
-    pub fn get_all_messages(&self) -> Vec<CachedMessage> {
-        self.messages.iter().map(message_to_cached_message).collect()
+    pub fn get_all_messages(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        self.messages
+            .iter()
+            .map(|message| message_to_py_dict(py, message))
+            .collect()
     }
 
     #[getter]
-    pub fn messages(&self) -> Vec<CachedMessage> {
-    self.get_all_messages()
-}
-
-pub fn __len__(&self) -> usize {
-    self.messages.len()
-}
-
-pub fn __getitem__(&self, index: isize) -> PyResult<CachedMessage> {
-    let len = self.messages.len() as isize;
-
-    if len == 0 {
-        return Err(PyIndexError::new_err("message cache is empty"));
+    pub fn messages(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        self.get_all_messages(py)
     }
 
-    let resolved = if index < 0 { len + index } else { index };
-
-    if resolved < 0 || resolved >= len {
-        return Err(PyIndexError::new_err(format!(
-            "message index {} out of range for cache of size {}",
-            index, len
-        )));
+    pub fn __len__(&self) -> usize {
+        self.messages.len()
     }
 
-    Ok(message_to_cached_message(&self.messages[resolved as usize]))
-}
+    pub fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        let len = self.messages.len() as isize;
+
+        if len == 0 {
+            return Err(PyIndexError::new_err("message cache is empty"));
+        }
+
+        let resolved = if index < 0 { len + index } else { index };
+
+        if resolved < 0 || resolved >= len {
+            return Err(PyIndexError::new_err(format!(
+                "message index {} out of range for cache of size {}",
+                index, len
+            )));
+        }
+
+        message_to_py_dict(py, &self.messages[resolved as usize])
+    }
 
 
     pub fn get_order_message(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
@@ -646,6 +536,7 @@ pub struct StreamingBinaryLoader {
 }
 
 impl StreamingBinaryLoader {
+    // BREAKPOINT: raw stream read entry (inspect EOF vs parsed message)
     fn get_next_message_raw(&mut self) -> PyResult<Option<Message>> {
         let Some(file) = self.file.as_mut() else {
             return Ok(None);
@@ -668,6 +559,7 @@ impl StreamingBinaryLoader {
     }
 
     #[pyo3(signature = (file_path, count_messages=true))]
+    // BREAKPOINT: stream open + header validation + optional message counting
     pub fn open_stream(&mut self, file_path: String, count_messages: bool) -> PyResult<usize> {
         let mut file = File::open(&file_path)
             .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
@@ -701,6 +593,7 @@ impl StreamingBinaryLoader {
         Ok(())
     }
 
+    // BREAKPOINT: Python-facing next message conversion/enrichment
     pub fn get_next_msg(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let Some(message) = self.get_next_message_raw()? else {
             return Ok(None);
@@ -767,6 +660,7 @@ pub struct OrderbookBuilder {
 }
 
 impl OrderbookBuilder {
+    // BREAKPOINT: filter gate for msg_type
     fn should_process(&self, msg_type: u8) -> bool {
         match &self.allowed_message_types {
             Some(allowed) => allowed.contains(&msg_type),
@@ -774,6 +668,7 @@ impl OrderbookBuilder {
         }
     }
 
+    // BREAKPOINT: core order/trade application to the orderbook
     fn process_message(&mut self, message: &Message) -> bool {
         match message {
             Message::Order(order_packet) => {
@@ -814,6 +709,7 @@ impl OrderbookBuilder {
         }
     }
 
+    // BREAKPOINT: Python dict -> internal Message conversion
     fn message_from_dict(&self, msg: &Bound<'_, PyDict>) -> PyResult<Message> {
         let msg_type_obj = msg
             .get_item("msg_type")?
@@ -1181,6 +1077,7 @@ impl OrderbookBuilder {
         Ok(count)
     }
 #[pyo3(signature = (source, limit=None))]
+    // BREAKPOINT: source dispatch (cache vs streaming) and loop progression
     pub fn build_from_source(
         &mut self,
         source: &Bound<'_, PyAny>,
@@ -1363,62 +1260,293 @@ impl SymbolMaster {
             .map_err(|e| PyRuntimeError::new_err(format!("cannot open {csv_path}: {e}")))?;
         let mut rdr = BufReader::new(file);
 
-        let mut header_line = String::new();
-        rdr.read_line(&mut header_line)
+        let mut first_line = String::new();
+        rdr.read_line(&mut first_line)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-        let hdrs: Vec<&str> = header_line
-            .trim_end_matches(|c| c == '\r' || c == '\n')
-            .split(',')
-            .collect();
-
-        macro_rules! col {
-            ($name:expr) => {
-                hdrs.iter()
-                    .position(|h| *h == $name)
-                    .ok_or_else(|| PyRuntimeError::new_err(
-                        format!("column '{}' not found in {csv_path}", $name)
-                    ))?
-            };
+        let mut remaining_lines: Vec<String> = Vec::new();
+        for line in rdr.lines() {
+            remaining_lines.push(line.map_err(|e| PyRuntimeError::new_err(e.to_string()))?);
         }
 
-        let i_token  = col!("FinInstrmId");
-        let i_symbol = col!("TckrSymb");
-        let i_expiry = col!("XpryDt");
-        let i_strike = col!("StrkPric");
-        let i_optype = col!("OptnTp");
-        let i_name   = col!("StockNm");
-        let i_lot    = hdrs.iter().position(|h| *h == "NewBrdLotQty")
-            .or_else(|| hdrs.iter().position(|h| *h == "MinLot"));
+        let clean_csv_field = |s: &str| -> String {
+            s.trim()
+                .trim_matches('\u{feff}')
+                .trim_matches('"')
+                .trim_matches('\'')
+                .trim()
+                .to_string()
+        };
 
-        let min_cols = [i_token, i_symbol, i_expiry, i_strike, i_optype, i_name]
-            .into_iter()
-            .max()
-            .unwrap_or(0);
+        let split_clean = |line: &str| -> Vec<String> {
+            line.trim_end_matches(|c| c == '\r' || c == '\n')
+                .split(',')
+                .map(|v| clean_csv_field(v))
+                .collect()
+        };
+
+        let first_fields = split_clean(&first_line);
+        let first_non_empty: Vec<&String> = first_fields.iter().filter(|v| !v.is_empty()).collect();
+
+        let first_line_is_numeric_metadata = !first_non_empty.is_empty()
+            && first_non_empty.iter().all(|v| v.parse::<u64>().is_ok());
+
+        let first_data_fields = remaining_lines
+            .iter()
+            .find(|line| !line.trim().is_empty())
+            .map(|line| split_clean(line));
+
+        let is_cm_contract_stream_info = first_line_is_numeric_metadata
+            && first_data_fields
+                .as_ref()
+                .and_then(|fields| fields.get(0))
+                .map(|v| v.eq_ignore_ascii_case("C"))
+                .unwrap_or(false);
 
         self.contracts.clear();
+
+        // cm_contract_stream_info.csv observed format:
+        //     1451246498,42171,
+        //     C,2,1,EQUITY,GOLDSTAR,0,0,SM
+        //     C,1,2,EQUITY,91D101220,0,0,TB
+        // Here the first line is metadata/count-like. Real rows start with C.
+        // Row columns are:
+        //     0=C, 1=stream/group, 2=token, 3=segment/type, 4=symbol/name, 5=?, 6=?, 7=series
+        if is_cm_contract_stream_info {
+            let mut count = 0usize;
+
+            for line in remaining_lines {
+                if line.trim().is_empty() {
+                    continue;
+                }
+
+                let f = split_clean(&line);
+                if f.len() < 5 {
+                    continue;
+                }
+                if !f[0].eq_ignore_ascii_case("C") {
+                    continue;
+                }
+
+                let Ok(token) = f[2].parse::<u32>() else {
+                    continue;
+                };
+
+                let symbol = if !f[4].is_empty() {
+                    f[4].clone()
+                } else {
+                    token.to_string()
+                };
+
+                let option_type = f.get(7)
+                    .filter(|v| !v.is_empty())
+                    .cloned()
+                    .unwrap_or_else(|| "XX".to_string());
+
+                self.contracts.insert(token, ContractInfo {
+                    symbol: symbol.clone(),
+                    name: symbol,
+                    option_type,
+                    strike: -1,
+                    expiry: String::new(),
+                    lot_size: 0,
+                });
+                count += 1;
+            }
+
+            return Ok(count);
+        }
+
+        let hdrs = first_fields;
+
+        let norm = |s: &str| -> String {
+            s.trim()
+                .trim_matches('\u{feff}')
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_ascii_lowercase()
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect()
+        };
+
+        let normalized_hdrs: Vec<String> = hdrs.iter().map(|h| norm(h)).collect();
+
+        let find_col = |names: &[&str]| -> Option<usize> {
+            let normalized_names: Vec<String> = names.iter().map(|name| norm(name)).collect();
+            normalized_hdrs
+                .iter()
+                .position(|h| normalized_names.iter().any(|name| h == name))
+        };
+
+        let token_col_names = [
+            "FinInstrmId",
+            "FinInstrmID",
+            "InstrumentToken",
+            "InstrumentId",
+            "InstrumentID",
+            "Token",
+            "TokenNo",
+            "TokenNumber",
+            "Tkn",
+            "Tk",
+            "SecurityToken",
+            "SecToken",
+        ];
+
+        let looks_headerless_numeric = hdrs
+            .iter()
+            .filter(|h| !h.is_empty())
+            .all(|h| h.parse::<u64>().is_ok());
+
+        let headerless_token_index = if looks_headerless_numeric {
+            if hdrs.len() > 1 && hdrs[1].parse::<u32>().is_ok() {
+                Some(1usize)
+            } else if hdrs.first().and_then(|v| v.parse::<u32>().ok()).is_some() {
+                Some(0usize)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let i_token = match find_col(&token_col_names) {
+            Some(i) => i,
+            None => headerless_token_index.ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "cannot load symbol master from {csv_path}: CM_STREAM_INFO_SCHEMA_PATCH_ACTIVE: missing required token column. Available columns: {}",
+                    hdrs.join(",")
+                ))
+            })?,
+        };
+
+        let i_symbol = find_col(&[
+            "TckrSymb",
+            "TickerSymbol",
+            "Ticker",
+            "Symbol",
+            "Sym",
+            "TokenSymbol",
+            "TradingSymbol",
+            "Tradingsymbol",
+            "InstrumentSymbol",
+            "SecuritySymbol",
+            "ScripName",
+            "StockNm",
+            "Name",
+        ]);
+
+        let i_name = find_col(&[
+            "StockNm",
+            "Name",
+            "SecurityName",
+            "ScripName",
+            "InstrumentName",
+            "Description",
+            "TokenSymbol",
+            "TradingSymbol",
+            "Symbol",
+            "TckrSymb",
+        ]);
+
+        let i_expiry = find_col(&[
+            "XpryDt",
+            "Expiry",
+            "ExpiryDt",
+            "ExpiryDate",
+            "ExpDt",
+        ]);
+
+        let i_strike = find_col(&[
+            "StrkPric",
+            "StrikePrice",
+            "Strike",
+            "StrkPrice",
+        ]);
+
+        let i_optype = find_col(&[
+            "OptnTp",
+            "OptionType",
+            "OptionTyp",
+            "OptType",
+            "OptnType",
+            "InstrumentType",
+        ]);
+
+        let i_lot = find_col(&[
+            "NewBrdLotQty",
+            "MinLot",
+            "LotSize",
+            "BoardLotQty",
+            "BrdLotQty",
+            "MarketLot",
+        ]);
+
         let mut count = 0usize;
 
-        for line in rdr.lines() {
-            let line = line.map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            let f: Vec<&str> = line.split(',').collect();
-            if f.len() <= min_cols { continue; }
+        let mut lines_to_process: Vec<String> = Vec::new();
+        if looks_headerless_numeric {
+            lines_to_process.push(first_line.clone());
+        }
+        lines_to_process.extend(remaining_lines);
 
-            let Ok(token) = f[i_token].trim().parse::<u32>() else { continue; };
-            let expiry_ts: i64  = f[i_expiry].trim().parse().unwrap_or(0);
-            let raw_strike: i64 = f[i_strike].trim().parse().unwrap_or(-100);
-            let lot: u32 = i_lot
-                .and_then(|i| f.get(i))
-                .and_then(|s| s.trim().parse().ok())
+        for line in lines_to_process {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let f = split_clean(&line);
+            if f.len() <= i_token {
+                continue;
+            }
+
+            let Ok(token) = f[i_token].parse::<u32>() else {
+                continue;
+            };
+
+            let get_trimmed = |idx: Option<usize>| -> Option<String> {
+                idx.and_then(|i| f.get(i))
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty())
+            };
+
+            let fallback_symbol = token.to_string();
+            let symbol = get_trimmed(i_symbol)
+                .or_else(|| get_trimmed(i_name))
+                .unwrap_or_else(|| fallback_symbol.clone());
+
+            let name = get_trimmed(i_name)
+                .or_else(|| get_trimmed(i_symbol))
+                .unwrap_or_else(|| symbol.clone());
+
+            let option_type = get_trimmed(i_optype)
+                .unwrap_or_else(|| "XX".to_string());
+
+            let expiry = match get_trimmed(i_expiry) {
+                Some(raw) => match raw.parse::<i64>() {
+                    Ok(ts) => unix_ts_to_date(ts),
+                    Err(_) => raw,
+                },
+                None => String::new(),
+            };
+
+            let strike = match get_trimmed(i_strike) {
+                Some(raw) => raw.parse::<i64>().map(|v| v / 100).unwrap_or(-1),
+                None => -1,
+            };
+
+            let lot_size: u32 = get_trimmed(i_lot)
+                .and_then(|s| s.parse().ok())
                 .unwrap_or(0);
 
             self.contracts.insert(token, ContractInfo {
-                symbol:      f[i_symbol].trim().to_string(),
-                name:        f[i_name].trim().to_string(),
-                option_type: f[i_optype].trim().to_string(),
-                strike:      raw_strike / 100,
-                expiry:      unix_ts_to_date(expiry_ts),
-                lot_size:    lot,
+                symbol,
+                name,
+                option_type,
+                strike,
+                expiry,
+                lot_size,
             });
             count += 1;
         }
@@ -1617,7 +1745,6 @@ impl FeedPathBuilder {
 
 #[pymodule]
 fn fastreader(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<CachedMessage>()?;
     m.add_class::<MessageCacheReader>()?;
     m.add_class::<StreamingBinaryLoader>()?;
     m.add_class::<OrderbookBuilder>()?;
@@ -1752,9 +1879,12 @@ mod tests {
 
     #[test]
     fn test_get_all_messages_empty_cache() {
-        let reader = MessageCacheReader::new();
-        let msgs = reader.get_all_messages();
-        assert!(msgs.is_empty());
+        pyo3::prepare_freethreaded_python();
+        pyo3::Python::with_gil(|py| {
+            let reader = MessageCacheReader::new();
+            let msgs = reader.get_all_messages(py).unwrap();
+            assert!(msgs.is_empty());
+        });
     }
 
     #[test]
@@ -2122,49 +2252,70 @@ mod debug_tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    // ── 4. get_all_messages: structured values match original packet ───────────
+    // ── 4. get_all_messages: dict values match original packet ────────────────
 
     #[test]
-    fn debug_get_all_messages_order_struct_values() {
+    fn debug_get_all_messages_order_dict_values() {
         let orig = make_order(5, 77, 3001, 900, 25, b'B');
         let path = write_tmp("get_all_msg", unsafe { as_bytes(&orig) });
 
         pyo3::prepare_freethreaded_python();
-        pyo3::Python::with_gil(|_py| {
+        pyo3::Python::with_gil(|py| {
             let mut reader = MessageCacheReader::new();
             reader.load_to_cache(path.to_str().unwrap().to_string()).unwrap();
-            let msgs = reader.get_all_messages();
+            let msgs = reader.get_all_messages(py).unwrap();
             assert_eq!(msgs.len(), 1);
-            let msg = &msgs[0];
-            assert_eq!(msg.message_kind, "order");
-            assert_eq!(msg.seq_no, 5);
-            assert_eq!(msg.order_id, Some(77));
-            assert_eq!(msg.token, 3001);
-            assert_eq!(msg.price, Some(900));
-            assert_eq!(msg.quantity, Some(25));
-            assert!(!msg.flags);
+
+            let dict = msgs[0].bind(py).downcast::<PyDict>().unwrap();
+
+            let kind: String = dict.get_item("message_kind").unwrap().unwrap().extract().unwrap();
+            let seq_no: u32 = dict.get_item("seq_no").unwrap().unwrap().extract().unwrap();
+            let order_id: u64 = dict.get_item("order_id").unwrap().unwrap().extract().unwrap();
+            let token: u32 = dict.get_item("token").unwrap().unwrap().extract().unwrap();
+            let price: u32 = dict.get_item("price").unwrap().unwrap().extract().unwrap();
+            let quantity: u32 = dict.get_item("quantity").unwrap().unwrap().extract().unwrap();
+            let flags: bool = dict.get_item("flags").unwrap().unwrap().extract().unwrap();
+
+            assert_eq!(kind, "order");
+            assert_eq!(seq_no, 5);
+            assert_eq!(order_id, 77);
+            assert_eq!(token, 3001);
+            assert_eq!(price, 900);
+            assert_eq!(quantity, 25);
+            assert!(!flags);
         });
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
-    fn debug_get_all_messages_trade_struct_values() {
+    fn debug_get_all_messages_trade_dict_values() {
         let orig = make_trade(9, 55, 66, 7777, 1_200, 8);
         let path = write_tmp("get_all_trd", unsafe { as_bytes(&orig) });
 
         pyo3::prepare_freethreaded_python();
-        pyo3::Python::with_gil(|_py| {
+        pyo3::Python::with_gil(|py| {
             let mut reader = MessageCacheReader::new();
             reader.load_to_cache(path.to_str().unwrap().to_string()).unwrap();
-            let msgs = reader.get_all_messages();
-            let msg = &msgs[0];
-            assert_eq!(msg.message_kind, "trade");
-            assert_eq!(msg.seq_no, 9);
-            assert_eq!(msg.buy_order_id, Some(55));
-            assert_eq!(msg.sell_order_id, Some(66));
-            assert_eq!(msg.token, 7777);
-            assert_eq!(msg.trade_price, Some(1_200));
-            assert_eq!(msg.trade_quantity, Some(8));
+            let msgs = reader.get_all_messages(py).unwrap();
+            assert_eq!(msgs.len(), 1);
+
+            let dict = msgs[0].bind(py).downcast::<PyDict>().unwrap();
+
+            let kind: String = dict.get_item("message_kind").unwrap().unwrap().extract().unwrap();
+            let seq_no: u32 = dict.get_item("seq_no").unwrap().unwrap().extract().unwrap();
+            let buy_order_id: u64 = dict.get_item("buy_order_id").unwrap().unwrap().extract().unwrap();
+            let sell_order_id: u64 = dict.get_item("sell_order_id").unwrap().unwrap().extract().unwrap();
+            let token: i32 = dict.get_item("token").unwrap().unwrap().extract().unwrap();
+            let trade_price: i32 = dict.get_item("trade_price").unwrap().unwrap().extract().unwrap();
+            let trade_quantity: i32 = dict.get_item("trade_quantity").unwrap().unwrap().extract().unwrap();
+
+            assert_eq!(kind, "trade");
+            assert_eq!(seq_no, 9);
+            assert_eq!(buy_order_id, 55);
+            assert_eq!(sell_order_id, 66);
+            assert_eq!(token, 7777);
+            assert_eq!(trade_price, 1_200);
+            assert_eq!(trade_quantity, 8);
         });
         let _ = std::fs::remove_file(&path);
     }

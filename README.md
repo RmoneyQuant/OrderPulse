@@ -1,17 +1,110 @@
-# fastreader / OrderPulse
+# orderpulse / fastreader
 
-High-performance Python bindings for reading NSE binary order/trade feed files, enriching messages with contract metadata, and building token-level order book snapshots.
+[![PyPI](https://img.shields.io/pypi/v/orderpulse.svg)](https://pypi.org/project/orderpulse/)
+[![Python](https://img.shields.io/pypi/pyversions/orderpulse.svg)](https://pypi.org/project/orderpulse/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-blue)](https://pypi.org/project/orderpulse/)
+[![Rust](https://img.shields.io/badge/Rust-PyO3-orange)](https://pyo3.rs/)
+[![Build](https://img.shields.io/badge/build-prebuilt%20wheels-success)](https://github.com/RmoneyQuant/OrderPulse/actions)
+[![License](https://img.shields.io/badge/license-Proprietary-lightgrey)](#license)
 
-This library is written in Rust for speed and exposed to Python using PyO3. It is designed for users who need to parse NSE CM/FO binary feed files, stream messages one by one, cache full files in memory, attach symbol metadata, and build order book depth from order and trade messages.
+`orderpulse` is a high-performance Python library powered by Rust for reading, streaming, enriching, and analysing NSE binary order/trade feed files.
+
+The Rust extension module is exposed to Python as:
+
+```python
+import fastreader
+```
+
+It is designed for market-data engineers, quantitative developers, and research teams who need fast access to raw NSE CM/FO binary feeds, token-level metadata enrichment, and order book snapshots directly from Python.
+
+---
+
+## Installation
+
+Install directly from PyPI:
+
+```bash
+pip install orderpulse
+```
+
+Verify installation:
+
+```python
+import fastreader
+
+print("fastreader imported successfully")
+print(fastreader.__file__)
+```
+
+`orderpulse` is distributed with prebuilt binary wheels. For supported Python and platform combinations, users do **not** need to install Rust, Cargo, maturin, or local compiler tools.
+
+---
+
+## Why orderpulse?
+
+Raw NSE binary order and trade feeds are large, low-level, and expensive to process in pure Python. `orderpulse` keeps the performance-critical parsing and order book logic in Rust while exposing a clean Python interface for research, analytics, and production workflows.
+
+---
 
 ## Project links
 
-- Homepage: https://github.com/RmoneyQuant/OrderPulse
-- Source: https://github.com/RmoneyQuant/OrderPulse/tree/main/src
-- Repository: https://github.com/RmoneyQuant/OrderPulse
-- Documentation: https://github.com/RmoneyQuant/OrderPulse#readme
-- Issues: https://github.com/RmoneyQuant/OrderPulse/issues
-- Changelog: https://github.com/RmoneyQuant/OrderPulse/blob/main/CHANGELOG.md
+* PyPI: https://pypi.org/project/orderpulse/
+* Homepage: https://github.com/RmoneyQuant/OrderPulse
+* Source: https://github.com/RmoneyQuant/OrderPulse/tree/main/src
+* Repository: https://github.com/RmoneyQuant/OrderPulse
+* Documentation: https://github.com/RmoneyQuant/OrderPulse#readme
+* Issues: https://github.com/RmoneyQuant/OrderPulse/issues
+* Changelog: https://github.com/RmoneyQuant/OrderPulse/releases
+
+---
+
+## Core features
+
+| Feature                   | Description                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| Rust-backed binary parser | Parses NSE order/trade binary feed packets with high performance.                      |
+| Python API                | Exposes clean Python classes, dictionaries, and helper methods.                        |
+| Streaming reader          | Reads large binary feed files message by message.                                      |
+| Cache reader              | Loads complete files into memory for repeated access.                                  |
+| Symbol enrichment         | Maps token values to symbol, expiry, strike, option type, lot size, and contract name. |
+| Order book builder        | Builds bid/ask depth from decoded order and trade messages.                            |
+| Snapshot export           | Exports top-level order book snapshots as CSV-compatible rows.                         |
+| Path builder              | Creates standard NSE feed file paths from segment, stream id, and date.                |
+| Prebuilt wheels           | Allows users to install with `pip install orderpulse` without local Rust setup.        |
+
+---
+
+## Quick start
+
+```python
+from fastreader import StreamingBinaryLoader, SymbolMaster, OrderbookBuilder
+
+FEED_FILE = "/nas/50.30/NSE_CM/Feed_CM_StreamID_2_29_12_2025.bin"
+CONTRACT_FILE = "/nas/50.30/CONTRACT/10_10_2025/cm_contract_stream_info.csv"
+
+# 1. Load contract metadata
+sm = SymbolMaster()
+contract_count = sm.load(CONTRACT_FILE)
+print("Contracts loaded:", contract_count)
+
+# 2. Open binary stream
+loader = StreamingBinaryLoader()
+loader.open_stream(FEED_FILE, count_messages=False)
+loader.attach_symbol_master(sm)
+
+# 3. Build order book
+builder = OrderbookBuilder()
+processed = builder.build_from_source(loader, limit=100000)
+print("Processed messages:", processed)
+
+# 4. Query snapshots
+active_tokens = builder.get_active_tokens()
+print("Active tokens:", len(active_tokens))
+
+for token in active_tokens[:10]:
+    print(sm.lookup(token))
+    print(builder.get_snapshot(token, levels=5))
+```
 
 ---
 
@@ -19,16 +112,16 @@ This library is written in Rust for speed and exposed to Python using PyO3. It i
 
 `fastreader` helps you:
 
-- Read NSE binary order and trade feed files.
-- Stream messages one by one without loading the full file into memory.
-- Load full files into an in-memory cache for repeated analysis.
-- Convert binary messages into Python dictionaries.
-- Read order messages and trade messages separately.
-- Detect whether the stream has reached end-of-file.
-- Enrich raw token values with symbol, strike price, option type, expiry, lot size, and contract name.
-- Build an order book from decoded messages.
-- Query best bid, best ask, spread, full depth, and top-level snapshot.
-- Build standard NSE feed file paths programmatically.
+* Read NSE binary order and trade feed files.
+* Stream messages one by one without loading the full file into memory.
+* Load full files into an in-memory cache for repeated analysis.
+* Convert binary messages into Python dictionaries.
+* Read order messages and trade messages separately.
+* Detect whether the stream has reached end-of-file.
+* Enrich raw token values with symbol, strike price, option type, expiry, lot size, and contract name.
+* Build an order book from decoded messages.
+* Query best bid, best ask, spread, full depth, and top-level snapshot.
+* Build standard NSE feed file paths programmatically.
 
 ---
 
@@ -36,13 +129,13 @@ This library is written in Rust for speed and exposed to Python using PyO3. It i
 
 The library has five main user-facing classes:
 
-| Class | Purpose |
-|---|---|
-| `MessageCacheReader` | Loads the complete binary feed file into memory and lets the user fetch all, order-only, or trade-only messages. |
-| `StreamingBinaryLoader` | Opens a binary feed file and reads messages one by one. Best for large files. |
-| `SymbolMaster` | Loads contract master CSV and maps token to symbol metadata. |
-| `OrderbookBuilder` | Builds and queries an order book from cached or streamed messages. |
-| `FeedPathBuilder` | Builds standard NSE feed file paths from segment, stream id, and date. |
+| Class                   | Purpose                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `MessageCacheReader`    | Loads the complete binary feed file into memory and lets the user fetch all, order-only, or trade-only messages. |
+| `StreamingBinaryLoader` | Opens a binary feed file and reads messages one by one. Best for large files.                                    |
+| `SymbolMaster`          | Loads contract master CSV and maps token to symbol metadata.                                                     |
+| `OrderbookBuilder`      | Builds and queries an order book from cached or streamed messages.                                               |
+| `FeedPathBuilder`       | Builds standard NSE feed file paths from segment, stream id, and date.                                           |
 
 Internally, Rust parses raw binary packets into `OrderPacket` and `TradePacket`, wraps them as `Message::Order` or `Message::Trade`, and exposes clean Python dictionaries for end users.
 
@@ -59,18 +152,24 @@ CONTRACT_FILE = "/nas/50.30/CONTRACT/10_10_2025/cm_contract_stream_info.csv"
 
 Practical note:
 
-- A date folder can exist but still be empty on some systems.
-- Always verify the contract CSV file exists before calling `sm.load(...)`.
-- If your file uses standard naming (`NSE_FO_contract_DDMMYYYY.csv` or `NSE_CM_contract_DDMMYYYY.csv`), you can use `load_for_date(...)`.
-- If your file has a custom name (for example `cm_contract_stream_info.csv`), use `load(...)` with the exact full path.
+* A date folder can exist but still be empty on some systems.
+* Always verify the contract CSV file exists before calling `sm.load(...)`.
+* If your file uses standard naming (`NSE_FO_contract_DDMMYYYY.csv` or `NSE_CM_contract_DDMMYYYY.csv`), you can use `load_for_date(...)`.
+* If your file has a custom name, for example `cm_contract_stream_info.csv`, use `load(...)` with the exact full path.
 
-> Note: `SymbolMaster.load()` requires the CSV headers used by the Rust parser, including columns like `FinInstrmId`, `TckrSymb`, `XpryDt`, `StrkPric`, `OptnTp`, `StockNm`, and either `NewBrdLotQty` or `MinLot`.
+> Note: `SymbolMaster.load()` supports contract master parsing for token metadata lookup. Standard contract master files should include fields such as token id, ticker symbol, expiry, strike, option type, stock name, and lot size. For custom contract files, use `load(...)` with the exact full path.
 
 ---
 
 ## 4. Installation
 
-After building or installing the Python extension, import it like this:
+For normal users:
+
+```bash
+pip install orderpulse
+```
+
+After installing the package, import the Python extension like this:
 
 ```python
 from fastreader import (
@@ -82,13 +181,7 @@ from fastreader import (
 )
 ```
 
-If you are developing locally with Rust and PyO3, a typical development installation is:
-
-```bash
-maturin develop --release
-```
-
-Then test the import:
+Verify import:
 
 ```python
 import fastreader
@@ -99,6 +192,12 @@ Expected output example:
 
 ```text
 <module 'fastreader' from '.../fastreader...so'>
+```
+
+If you are developing locally with Rust and PyO3, a typical development installation is:
+
+```bash
+maturin develop --release
 ```
 
 ---
@@ -132,19 +231,19 @@ When a message is returned to Python, it is returned as a dictionary.
 
 Important fields:
 
-| Field | Meaning |
-|---|---|
-| `message_kind` | `"order"` for order messages. |
-| `seq_no` | Stream sequence number. |
-| `msg_type` | NSE message type. Usually `N`, `M`, or `X` for order messages. |
-| `stream_id` | Stream id from binary feed header. |
-| `order_id` | Exchange order id. |
-| `token` | Instrument token. |
-| `order_type` | Usually `B` for buy or `S` for sell. |
-| `price` | Raw price value from feed. |
-| `quantity` | Order quantity. |
-| `flags` | Missed/flag status from packet. |
-| `token_symbol`, `strike_price`, `option_type` | Populated after symbol enrichment. |
+| Field                                         | Meaning                                                        |
+| --------------------------------------------- | -------------------------------------------------------------- |
+| `message_kind`                                | `"order"` for order messages.                                  |
+| `seq_no`                                      | Stream sequence number.                                        |
+| `msg_type`                                    | NSE message type. Usually `N`, `M`, or `X` for order messages. |
+| `stream_id`                                   | Stream id from binary feed header.                             |
+| `order_id`                                    | Exchange order id.                                             |
+| `token`                                       | Instrument token.                                              |
+| `order_type`                                  | Usually `B` for buy or `S` for sell.                           |
+| `price`                                       | Raw price value from feed.                                     |
+| `quantity`                                    | Order quantity.                                                |
+| `flags`                                       | Missed/flag status from packet.                                |
+| `token_symbol`, `strike_price`, `option_type` | Populated after symbol enrichment.                             |
 
 ### Trade message dictionary
 
@@ -171,15 +270,15 @@ Important fields:
 
 Important fields:
 
-| Field | Meaning |
-|---|---|
-| `message_kind` | `"trade"` for trade messages. |
-| `msg_type` | `T` for trade. |
-| `buy_order_id` | Buy-side order id. |
-| `sell_order_id` | Sell-side order id. |
-| `token` | Instrument token. |
-| `trade_price` | Executed trade price. |
-| `trade_quantity` | Executed trade quantity. |
+| Field            | Meaning                       |
+| ---------------- | ----------------------------- |
+| `message_kind`   | `"trade"` for trade messages. |
+| `msg_type`       | `T` for trade.                |
+| `buy_order_id`   | Buy-side order id.            |
+| `sell_order_id`  | Sell-side order id.           |
+| `token`          | Instrument token.             |
+| `trade_price`    | Executed trade price.         |
+| `trade_quantity` | Executed trade quantity.      |
 
 ---
 
@@ -229,10 +328,10 @@ The exact number depends on your binary feed file.
 
 Working:
 
-- Opens the binary feed file.
-- Reads only order and trade packets.
-- Stores parsed messages inside Rust memory.
-- Returns the total number of loaded messages.
+* Opens the binary feed file.
+* Reads only order and trade packets.
+* Stores parsed messages inside Rust memory.
+* Returns the total number of loaded messages.
 
 ---
 
@@ -266,10 +365,10 @@ trade 99 T
 
 Working:
 
-- Converts every cached Rust message into a typed Python object with attribute access.
-- Common fields are always available: `message_kind`, `seq_no`, `msg_len`, `stream_id`, `msg_type`, `exch_ts`, `local_ts`, `flags`, `token`.
-- Order-only fields are optional: `order_type`, `order_id`, `price`, `quantity`.
-- Trade-only fields are optional: `buy_order_id`, `sell_order_id`, `trade_price`, `trade_quantity`.
+* Converts every cached Rust message into a typed Python object with attribute access.
+* Common fields are always available: `message_kind`, `seq_no`, `msg_len`, `stream_id`, `msg_type`, `exch_ts`, `local_ts`, `flags`, `token`.
+* Order-only fields are optional: `order_type`, `order_id`, `price`, `quantity`.
+* Trade-only fields are optional: `buy_order_id`, `sell_order_id`, `trade_price`, `trade_quantity`.
 
 ---
 
@@ -292,18 +391,18 @@ print(all_messages[0].message_kind, all_messages[0].seq_no)
 
 Working:
 
-- `len(reader)` returns number of cached messages.
-- `reader[index]` returns one `CachedMessage` object (supports negative index).
-- `reader.messages` returns the full structured list (same output type as `get_all_messages()`).
+* `len(reader)` returns number of cached messages.
+* `reader[index]` returns one `CachedMessage` object and supports negative index.
+* `reader.messages` returns the full structured list, same output type as `get_all_messages()`.
 
 Practical note:
 
-- For very large files, prefer `reader[index]` when you only need a few messages.
-- `reader.messages` materializes all cached objects and can use significant memory.
+* For very large files, prefer `reader[index]` when you only need a few messages.
+* `reader.messages` materializes all cached objects and can use significant memory.
 
 ### If you see `AttributeError: 'builtins.MessageCacheReader' object has no attribute 'messages'`
 
-This usually means your notebook/kernel is using an older extension build.
+This usually means your notebook or kernel is using an older extension build.
 
 ```python
 import sys, fastreader
@@ -319,8 +418,13 @@ print([x for x in dir(reader) if x in ("messages", "__getitem__", "__len__", "ge
 If `has messages` is `False`:
 
 1. Rebuild/install extension in the same environment:
-    `maturin develop --release`
+
+   ```bash
+   maturin develop --release
+   ```
+
 2. Restart the notebook kernel.
+
 3. Re-run import and setup cells.
 
 ---
@@ -362,9 +466,9 @@ Order count: 1800000
 
 Working:
 
-- Filters cached messages where `message_kind` is order.
-- Converts each order packet into a Python dictionary.
-- Good for pandas conversion and downstream analysis.
+* Filters cached messages where `message_kind` is order.
+* Converts each order packet into a Python dictionary.
+* Good for pandas conversion and downstream analysis.
 
 Example with pandas:
 
@@ -421,8 +525,8 @@ Trade count: 700000
 
 Working:
 
-- Filters cached messages where `message_kind` is trade.
-- Converts each trade packet into a Python dictionary.
+* Filters cached messages where `message_kind` is trade.
+* Converts each trade packet into a Python dictionary.
 
 ---
 
@@ -445,8 +549,8 @@ True
 
 Working:
 
-- Internally calls the same trade-message extraction logic.
-- Kept for user convenience.
+* Internally calls the same trade-message extraction logic.
+* Kept for user convenience.
 
 ---
 
@@ -473,10 +577,10 @@ Expected output example:
 
 Working:
 
-- Counts total cached messages.
-- Counts order messages.
-- Counts trade messages.
-- Estimates Rust-side memory usage.
+* Counts total cached messages.
+* Counts order messages.
+* Counts trade messages.
+* Estimates Rust-side memory usage.
 
 ---
 
@@ -532,10 +636,10 @@ Expected output:
 
 Working:
 
-- Opens the binary file.
-- Validates the first message header.
-- Optionally scans the full file to count messages.
-- Sets the stream cursor to the beginning.
+* Opens the binary file.
+* Validates the first message header.
+* Optionally scans the full file to count messages.
+* Sets the stream cursor to the beginning.
 
 ---
 
@@ -594,10 +698,10 @@ Expected output example:
 
 Working:
 
-- Reads one binary packet from the current file cursor.
-- Converts it into a Python dictionary.
-- Advances the cursor to the next message.
-- Returns `None` after the final message.
+* Reads one binary packet from the current file cursor.
+* Converts it into a Python dictionary.
+* Advances the cursor to the next message.
+* Returns `None` after the final message.
 
 ---
 
@@ -623,10 +727,10 @@ Completed
 
 Working:
 
-- Looks ahead to check whether another message exists.
-- Restores the file cursor to its original position.
-- Does not consume or skip any message.
-- Returns `True` when no more messages are available.
+* Looks ahead to check whether another message exists.
+* Restores the file cursor to its original position.
+* Does not consume or skip any message.
+* Returns `True` when no more messages are available.
 
 Recommended safe streaming pattern:
 
@@ -668,8 +772,8 @@ After reset: {'message_kind': 'order', 'seq_no': 1, ...}
 
 Working:
 
-- Seeks the file cursor to byte position `0`.
-- Lets the user re-read the same file from the beginning.
+* Seeks the file cursor to byte position `0`.
+* Lets the user re-read the same file from the beginning.
 
 ---
 
@@ -715,8 +819,8 @@ Expected output example:
 
 Working:
 
-- Stores the token-to-contract map inside the stream loader.
-- Every streamed message is enriched automatically when its token exists in the symbol master.
+* Stores the token-to-contract map inside the stream loader.
+* Every streamed message is enriched automatically when its token exists in the symbol master.
 
 ---
 
@@ -738,8 +842,8 @@ None None None
 
 Working:
 
-- Clears the attached metadata map.
-- Future streamed messages return raw token fields only.
+* Clears the attached metadata map.
+* Future streamed messages return raw token fields only.
 
 ---
 
@@ -781,14 +885,15 @@ print(sm)
 print("Length:", len(sm))
 ```
 
-Safer path-discovery example (recommended for notebook use):
+Safer path-discovery example, recommended for notebook use:
 
 ```python
 from pathlib import Path
+from fastreader import SymbolMaster
 
 sm = SymbolMaster()
 
-# 1) Try your exact expected path first
+# 1. Try exact expected paths first.
 candidates = [
     Path("/nas/50.30/CONTRACT/27_05_2026/NSE_FO_contract_27052026.csv"),
     Path("/home/pratima/CONTRACT/27_05_2026/NSE_FO_contract_27052026.csv"),
@@ -797,7 +902,7 @@ candidates = [
 
 csv_path = next((str(p) for p in candidates if p.exists()), None)
 
-# 2) Fallback: pick latest available FO contract CSV from NAS
+# 2. Fallback: pick latest available FO contract CSV from NAS.
 if csv_path is None:
     fo_files = sorted(Path("/nas/50.30/CONTRACT").glob("*/NSE_FO_contract_*.csv"))
     if fo_files:
@@ -821,18 +926,11 @@ Length: 50000
 
 Working:
 
-- Opens the CSV file.
-- Reads required columns:
-  - `FinInstrmId`
-  - `TckrSymb`
-  - `XpryDt`
-  - `StrkPric`
-  - `OptnTp`
-  - `StockNm`
-  - `NewBrdLotQty` or `MinLot`
-- Converts expiry Unix timestamp into readable date.
-- Converts strike price by dividing raw strike by `100`.
-- Stores mapping as `token -> contract metadata`.
+* Opens the CSV file.
+* Reads contract metadata columns.
+* Converts expiry values into readable dates where supported.
+* Converts strike values where required.
+* Stores mapping as `token -> contract metadata`.
 
 ---
 
@@ -867,11 +965,11 @@ NSE_FO, FO, NSE_CM, CM
 
 Working:
 
-- Normalizes segment to `FO` or `CM`.
-- Builds path using date and base path.
-- Calls `load()` internally.
+* Normalizes segment to `FO` or `CM`.
+* Builds path using date and base path.
+* Calls `load()` internally.
 
-Important note for your provided CSV path:
+Important note for custom CSV paths:
 
 ```python
 CONTRACT_FILE = "/nas/50.30/CONTRACT/10_10_2025/cm_contract_stream_info.csv"
@@ -927,9 +1025,9 @@ Expected output when token is not found:
 
 Working:
 
-- Searches the loaded Rust hash map by token.
-- Returns `found=True` and metadata if available.
-- Returns `found=False` and `None` fields if unavailable.
+* Searches the loaded Rust hash map by token.
+* Returns `found=True` and metadata if available.
+* Returns `found=False` and `None` fields if unavailable.
 
 ---
 
@@ -965,16 +1063,17 @@ Found: False
 
 Working:
 
-- Reads the `token` field from the message dictionary.
-- Looks up token in loaded symbol master.
-- Adds/updates:
-  - `token_symbol`
-  - `strike_price`
-  - `option_type`
-  - `expiry`
-  - `lot_size`
-  - `name`
-- Returns `True` if enrichment happened.
+* Reads the `token` field from the message dictionary.
+* Looks up token in loaded symbol master.
+* Adds or updates:
+
+  * `token_symbol`
+  * `strike_price`
+  * `option_type`
+  * `expiry`
+  * `lot_size`
+  * `name`
+* Returns `True` if enrichment happened.
 
 ---
 
@@ -1010,10 +1109,10 @@ builder.apply_filter(["N", "M", "X"])
 
 This means:
 
-- Process new order messages: `N`
-- Process modify order messages: `M`
-- Process cancel/delete messages: `X`
-- Skip trade messages: `T`
+* Process new order messages: `N`
+* Process modify order messages: `M`
+* Process cancel/delete messages: `X`
+* Skip trade messages: `T`
 
 To clear the filter:
 
@@ -1029,8 +1128,8 @@ No direct output. Filter is applied internally.
 
 Working:
 
-- Stores allowed message types as bytes.
-- During order book building, unsupported message types are skipped.
+* Stores allowed message types as bytes.
+* During order book building, unsupported message types are skipped.
 
 ---
 
@@ -1064,10 +1163,10 @@ Accepted: False
 
 Working:
 
-- Expects one dictionary returned by `get_next_msg()`.
-- Converts the Python dictionary back into Rust message format.
-- Applies the order/trade update to the order book manager.
-- Returns whether the message was accepted and processed.
+* Expects one dictionary returned by `get_next_msg()`.
+* Converts the Python dictionary back into Rust message format.
+* Applies the order/trade update to the order book manager.
+* Returns whether the message was accepted and processed.
 
 Common error:
 
@@ -1130,10 +1229,10 @@ Processed: 1800000
 
 Working:
 
-- If source is `MessageCacheReader`, it uses internal cached Rust messages directly.
-- If source is `list[dict]`, it converts each dictionary into Rust message format.
-- Applies each message to the order book.
-- Returns count of processed messages.
+* If source is `MessageCacheReader`, it uses internal cached Rust messages directly.
+* If source is `list[dict]`, it converts each dictionary into Rust message format.
+* Applies each message to the order book.
+* Returns count of processed messages.
 
 ---
 
@@ -1179,9 +1278,9 @@ Processed first messages: 10000
 
 Working:
 
-- If source is a cache reader, delegates to `build_from_list()`.
-- If source is a streaming loader, reads from the current stream cursor.
-- Stops at end-of-file or after `limit` accepted messages.
+* If source is a cache reader, delegates to `build_from_list()`.
+* If source is a streaming loader, reads from the current stream cursor.
+* Stops at end-of-file or after `limit` accepted messages.
 
 Important:
 
@@ -1213,8 +1312,8 @@ Number of active tokens: 1250
 
 Working:
 
-- Queries the order book manager.
-- Returns tokens for which depth/order book state exists.
+* Queries the order book manager.
+* Returns tokens for which depth/order book state exists.
 
 ---
 
@@ -1261,13 +1360,14 @@ Expected output when token is not found:
 
 Working:
 
-- Reads top bid and ask levels from the order book.
-- Calculates:
-  - `best_bid`
-  - `best_ask`
-  - `spread = best_ask_price - best_bid_price`
-  - `mid_price`
-- Defaults to 5 levels if `levels` is not provided.
+* Reads top bid and ask levels from the order book.
+* Calculates:
+
+  * `best_bid`
+  * `best_ask`
+  * `spread = best_ask_price - best_bid_price`
+  * `mid_price`
+* Defaults to 5 levels if `levels` is not provided.
 
 ---
 
@@ -1310,9 +1410,9 @@ Expected output when token is not found:
 
 Working:
 
-- Returns all available bid and ask levels for the token.
-- Best for detailed order book inspection.
-- Use `get_snapshot()` for faster top-N view.
+* Returns all available bid and ask levels for the token.
+* Best for detailed order book inspection.
+* Use `get_snapshot()` for faster top-N view.
 
 ---
 
@@ -1333,7 +1433,7 @@ local_ts,exch_ts,mid_price,bid_price_0,bid_qty_0,ask_price_0,ask_qty_0,bid_price
 
 Working:
 
-- Returns a fixed CSV header for 5-level snapshot output.
+* Returns a fixed CSV header for 5-level snapshot output.
 
 ---
 
@@ -1356,9 +1456,9 @@ local_ts,exch_ts,mid_price,bid_price_0,bid_qty_0,ask_price_0,ask_qty_0,bid_price
 
 Working:
 
-- Fetches top levels from the order book.
-- Pads missing bid/ask levels with `0,0`.
-- Returns a CSV-compatible row.
+* Fetches top levels from the order book.
+* Pads missing bid/ask levels with `0,0`.
+* Returns a CSV-compatible row.
 
 Save snapshots to CSV:
 
@@ -1439,9 +1539,9 @@ Expected output:
 
 Working:
 
-- Accepts segment values such as `NSE_CM`, `CM`, `NSE_FO`, or `FO`.
-- Validates stream id and date values.
-- Returns the standard feed file path string.
+* Accepts segment values such as `NSE_CM`, `CM`, `NSE_FO`, or `FO`.
+* Validates stream id and date values.
+* Returns the standard feed file path string.
 
 ---
 
@@ -1478,9 +1578,9 @@ RuntimeError: file does not exist: /nas/50.30/NSE_CM/Feed_CM_StreamID_2_29_12_20
 
 Working:
 
-- Builds the same path as `build()`.
-- Performs disk existence check.
-- Raises `RuntimeError` if file is missing.
+* Builds the same path as `build()`.
+* Performs disk existence check.
+* Raises `RuntimeError` if file is missing.
 
 ---
 
@@ -1718,9 +1818,9 @@ RuntimeError: cannot open /wrong/path/contracts.csv: No such file or directory
 
 Checklist:
 
-- Confirm file exists with `Path(path).exists()`.
-- If using `load_for_date(...)`, confirm the generated filename follows `NSE_{FO|CM}_contract_DDMMYYYY.csv`.
-- If your CSV has a custom filename, switch to `sm.load(full_custom_path)`.
+* Confirm file exists with `Path(path).exists()`.
+* If using `load_for_date(...)`, confirm the generated filename follows `NSE_{FO|CM}_contract_DDMMYYYY.csv`.
+* If your CSV has a custom filename, switch to `sm.load(full_custom_path)`.
 
 ---
 
@@ -1782,36 +1882,36 @@ TypeError: unsupported msg_type: Z
 
 ## Use `MessageCacheReader` when:
 
-- File size is manageable.
-- You need to repeatedly access messages.
-- You want to convert orders/trades into pandas DataFrames.
-- You want fast order book building from memory.
+* File size is manageable.
+* You need to repeatedly access messages.
+* You want to convert orders/trades into pandas DataFrames.
+* You want fast order book building from memory.
 
 ## Use `StreamingBinaryLoader` when:
 
-- File is very large.
-- You want low memory usage.
-- You want to process messages one by one.
-- You want to stop after a fixed limit.
+* File is very large.
+* You want low memory usage.
+* You want to process messages one by one.
+* You want to stop after a fixed limit.
 
 ## Use `SymbolMaster` when:
 
-- You need token-to-symbol mapping.
-- You want `token_symbol`, `strike_price`, `option_type`, `expiry`, `lot_size`, and `name` in messages.
-- You want cleaner outputs for library users.
+* You need token-to-symbol mapping.
+* You want `token_symbol`, `strike_price`, `option_type`, `expiry`, `lot_size`, and `name` in messages.
+* You want cleaner outputs for library users.
 
 ## Use `OrderbookBuilder` when:
 
-- You need best bid/best ask.
-- You need spread and mid price.
-- You need top-5 or full depth by token.
-- You need CSV-style snapshot rows.
+* You need best bid/best ask.
+* You need spread and mid price.
+* You need top-5 or full depth by token.
+* You need CSV-style snapshot rows.
 
 ## Use `FeedPathBuilder` when:
 
-- Your files follow the standard `/nas/50.30` feed path pattern.
-- You want to avoid hardcoding feed paths.
-- You want path validation before opening files.
+* Your files follow the standard `/nas/50.30` feed path pattern.
+* You want to avoid hardcoding feed paths.
+* You want path validation before opening files.
 
 ---
 
@@ -1879,16 +1979,16 @@ Snapshot: {'token': 12345, 'found': True, 'mid_price': 250025, 'best_bid': (2500
 
 # 15. Developer notes
 
-- Binary message parsing is handled in Rust for performance.
-- Python receives normal dictionaries, lists, strings, and integers.
-- `get_next_msg()` returns `None` at end-of-file.
-- `is_end_of_msg()` checks EOF without advancing the cursor.
-- Symbol enrichment is optional.
-- `attach_symbol_master()` is best for streaming workflows.
-- `SymbolMaster.enrich()` is useful when you already have a message dictionary.
-- `build_from_source()` is the most flexible order book API because it accepts both cached and streaming sources.
-- `get_snapshot()` is best for application display.
-- `get_snapshot_row()` and `snapshot_header()` are best for CSV export.
+* Binary message parsing is handled in Rust for performance.
+* Python receives normal dictionaries, lists, strings, and integers.
+* `get_next_msg()` returns `None` at end-of-file.
+* `is_end_of_msg()` checks EOF without advancing the cursor.
+* Symbol enrichment is optional.
+* `attach_symbol_master()` is best for streaming workflows.
+* `SymbolMaster.enrich()` is useful when you already have a message dictionary.
+* `build_from_source()` is the most flexible order book API because it accepts both cached and streaming sources.
+* `get_snapshot()` is best for application display.
+* `get_snapshot_row()` and `snapshot_header()` are best for CSV export.
 
 ---
 
@@ -1916,3 +2016,57 @@ for token in builder.get_active_tokens()[:10]:
 ```
 
 This is the recommended starting point for most library users.
+
+---
+
+# 17. Developer build and release
+
+This section is for maintainers and developers building from source.
+
+## 17.1 Build locally
+
+From the package directory:
+
+```bash
+cd OrderPulse
+maturin build --release
+```
+
+Example output:
+
+```text
+target/wheels/orderpulse-0.2.58-cp39-cp39-manylinux_2_34_x86_64.whl
+```
+
+## 17.2 Install local wheel
+
+```bash
+python -m pip uninstall -y orderpulse fastreader
+python -m pip install --force-reinstall ../target/wheels/orderpulse-0.2.58-cp39-cp39-manylinux_2_34_x86_64.whl
+```
+
+## 17.3 Test local install
+
+```python
+import fastreader
+
+print("fastreader imported successfully")
+print(fastreader.__file__)
+```
+
+## 17.4 Release through GitHub Actions
+
+The project uses GitHub Actions to build precompiled wheels and publish them to PyPI.
+
+Workflow file:
+
+```text
+.github/workflows/release.yml
+```
+
+Create and push a version tag:
+
+```bash
+git tag -f v0.2.58
+git push -f origin v0.2.58
+```
